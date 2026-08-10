@@ -228,3 +228,7 @@ The project contains automated checks for:
 - repeated-trial aggregation and deterministic scoring
 - API lifecycle, SSE progress and artifact security
 - safe reproducible exports with checksums
+
+## License
+
+Licensed under the [Apache License 2.0](LICENSE).
