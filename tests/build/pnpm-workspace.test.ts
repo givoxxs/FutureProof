@@ -34,6 +34,7 @@ test("repository is a single pnpm 11.4.0 workspace", async () => {
   ]) {
     assert.match(workspace, new RegExp(entry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
+  assert.match(workspace, /allowBuilds:\s*\n\s+esbuild:\s+true/);
   assert.equal(await exists("pnpm-lock.yaml"), true);
 });
 
@@ -78,4 +79,25 @@ test("gitignore protects local secrets and generated pnpm/test state", async () 
   ]) {
     assert.ok(gitignore.includes(pattern), `missing ignore rule: ${JSON.stringify(pattern.trim())}`);
   }
+});
+
+test("Makefile exposes the supported pnpm developer workflow", async () => {
+  const makefile = await readFile(path.join(root, "Makefile"), "utf8");
+  for (const target of [
+    "install",
+    "test",
+    "typecheck",
+    "build",
+    "dev",
+    "dev-api",
+    "dev-web",
+    "visual-test",
+    "demo-verify",
+    "smoke",
+    "ci",
+  ]) {
+    assert.match(makefile, new RegExp(`^${target}:`, "m"), `missing Make target ${target}`);
+  }
+  assert.doesNotMatch(makefile, /\bnpm\b|\bnpx\b/);
+  assert.match(makefile, /pnpm/);
 });
