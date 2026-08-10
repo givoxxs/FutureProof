@@ -13,16 +13,20 @@ export interface Sandbox {
 
 const EXCLUDED = new Set([".git", "node_modules", ".futureproof", "dist"]);
 
-async function runNpmCi(cwd: string): Promise<void> {
+async function runPnpmInstall(cwd: string): Promise<void> {
   await new Promise<void>((resolve, reject) => {
-    const child = spawn("npm", ["ci", "--ignore-scripts"], { cwd, shell: false, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn("pnpm", ["install", "--no-lockfile", "--ignore-scripts"], {
+      cwd,
+      shell: false,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     let stderr = "";
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", (chunk) => { stderr += chunk; });
     child.on("error", reject);
     child.on("close", (code) => {
       if (code === 0) resolve();
-      else reject(new Error(`npm ci failed with exit ${code ?? 1}: ${stderr.trim()}`));
+      else reject(new Error(`pnpm install failed with exit ${code ?? 1}: ${stderr.trim()}`));
     });
   });
 }
@@ -57,7 +61,7 @@ export async function createSandbox(args: {
     recursive: true,
     filter: (sourcePath) => shouldCopy(sourceRoot, sourcePath),
   });
-  await runNpmCi(destination);
+  await runPnpmInstall(destination);
   return { root: destination, candidateId: args.candidateId, scenarioId: args.scenarioId, trial: args.trial };
 }
 
@@ -71,9 +75,9 @@ function parseNodeTestCounts(output: string): { passed: number; failed: number }
 }
 
 export async function validateBaseline(sandbox: Sandbox): Promise<CandidateBaseline> {
-  const test = await runAllowedCommand(sandbox.root, "npm test", 30_000);
+  const test = await runAllowedCommand(sandbox.root, "pnpm test", 30_000);
   const counts = parseNodeTestCounts(`${test.stdout}\n${test.stderr}`);
-  const build = await runAllowedCommand(sandbox.root, "npm run build", 30_000);
+  const build = await runAllowedCommand(sandbox.root, "pnpm run build", 30_000);
   const valid = test.exitCode === 0 && counts.failed === 0 && build.exitCode === 0;
   return {
     candidateId: sandbox.candidateId,
