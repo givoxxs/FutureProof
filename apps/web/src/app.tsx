@@ -8,20 +8,30 @@ function BrandMark() {
   return <div className="brand-mark" aria-hidden="true"><span /><span /><span /></div>;
 }
 
-function Sidebar({ active }: { active: "setup" | "run" | "report" }) {
+const navigation = [
+  ["Overview", "⌂"],
+  ["Future Scenarios", "◈"],
+  ["Experiments", "▣"],
+  ["Comparisons", "⌁"],
+  ["Reports", "▤"],
+  ["Settings", "⚙"],
+] as const;
+
+function Sidebar({ active, onNewAnalysis }: { active: "setup" | "run" | "report"; onNewAnalysis: () => void }) {
+  const activeLabel = active === "run" ? "Experiments" : active === "report" ? "Reports" : "Overview";
   return <aside className="app-sidebar">
-    <div className="brand"><BrandMark /><div><strong>FutureProof</strong><span>PR stress testing</span></div></div>
+    <div className="brand"><BrandMark /><div><strong>FutureProof</strong></div></div>
+    <button className="new-analysis-button" type="button" disabled={active === "run"} onClick={onNewAnalysis}>＋ New Analysis</button>
     <nav aria-label="Primary navigation">
-      <span className={active === "setup" ? "nav-item active" : "nav-item"}><span className="nav-icon" aria-hidden="true">◇</span> Setup</span>
-      <span className={active === "run" ? "nav-item active" : "nav-item"}><span className="nav-icon" aria-hidden="true">◫</span> Live run</span>
-      <span className={active === "report" ? "nav-item active" : "nav-item"}><span className="nav-icon" aria-hidden="true">▤</span> Report</span>
+      {navigation.map(([label, icon]) => <span key={label} className={label === activeLabel ? "nav-item active" : "nav-item"} aria-current={label === activeLabel ? "page" : undefined}><span className="nav-icon" aria-hidden="true">{icon}</span>{label}</span>)}
     </nav>
-    <div className="sidebar-method">
-      <span className="sidebar-method-label">Method</span>
-      <strong>Counterfactual execution</strong>
-      <p>Same future tasks, same agent, measured outcomes.</p>
+    <div className="sidebar-analysis">
+      <span className="sidebar-method-label">Active analysis</span>
+      <strong>Notification System PR</strong>
+      <p>PR #42 vs PR #84</p>
+      <span className="analysis-live"><span aria-hidden="true" />same base requirement</span>
     </div>
-    <div className="sidebar-footer"><span className="shield-icon" aria-hidden="true">✓</span><span>Server-owned fixtures<br />No browser file paths</span></div>
+    <div className="sidebar-footer"><span className="shield-icon" aria-hidden="true">✓</span><span>Frozen scenarios<br />Evidence-backed results</span></div>
   </aside>;
 }
 
@@ -85,11 +95,23 @@ export function App() {
     return unsubscribe;
   }, [analysisId, refreshTerminalState, state]);
 
+  const reset = () => {
+    setAnalysisId(null);
+    setState("idle");
+    setReport(null);
+    setEvents([]);
+    setError(null);
+    setDrawerDetail(null);
+    setDrawerScenarioId(null);
+  };
+
   const start = async () => {
     setStarting(true);
     setError(null);
     setEvents([]);
     setReport(null);
+    setDrawerDetail(null);
+    setDrawerScenarioId(null);
     try {
       const created = await startDemoAnalysis();
       setAnalysisId(created.analysisId);
@@ -125,12 +147,12 @@ export function App() {
 
   const active = state === "running" ? "run" : state === "completed" ? "report" : "setup";
   return <div className="app-shell">
-    <Sidebar active={active} />
+    <Sidebar active={active} onNewAnalysis={reset} />
     <main className="app-main">
       {state === "idle" ? <SetupPage onStart={() => void start()} busy={starting} error={error} /> : null}
       {state === "running" && analysisId ? <RunProgress analysisId={analysisId} events={events} /> : null}
-      {state === "failed" ? <div className="failure-page"><p className="eyebrow">Analysis stopped</p><h1>The experiment could not complete.</h1><p>{error}</p><button className="primary-button" type="button" onClick={() => { setState("idle"); setError(null); }}>Return to setup</button></div> : null}
-      {state === "completed" && report ? <ReportPage report={report} onOpenScenario={(scenarioId, trigger) => void openScenario(scenarioId, trigger)} /> : null}
+      {state === "failed" ? <div className="failure-page"><p className="eyebrow">Analysis stopped</p><h1>The experiment could not complete.</h1><p>{error}</p><button className="primary-button" type="button" onClick={reset}>Return to setup</button></div> : null}
+      {state === "completed" && report ? <ReportPage report={report} onRerun={() => void start()} onOpenScenario={(scenarioId, trigger) => void openScenario(scenarioId, trigger)} /> : null}
     </main>
     {drawerLoading && drawerScenarioId ? <div className="drawer-loading" role="status">Loading scenario evidence…</div> : null}
     {analysisId && drawerScenarioId && drawerDetail ? <ScenarioDrawer
