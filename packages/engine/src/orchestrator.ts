@@ -49,10 +49,17 @@ type InjectAcceptance = typeof injectAcceptanceTestDefault;
 type RunAgent = typeof runCodingAgent;
 type CollectMetrics = typeof collectRunMetricsDefault;
 
+export interface OrchestratorProgressEvent {
+  type: "candidate_started" | "candidate_completed";
+  candidateId: CandidateId;
+  scenarioId: string;
+}
+
 export interface OrchestratorDeps {
   client: ToolCallingLlmClient;
   modelName: string;
   random?: () => number;
+  onProgress?: (event: OrchestratorProgressEvent) => void;
   createSandbox?: CreateSandbox;
   validateBaseline?: ValidateBaseline;
   injectAcceptanceTest?: InjectAcceptance;
@@ -304,6 +311,7 @@ export async function runAnalysis(request: AnalysisRequest, deps: OrchestratorDe
     for (const scenario of scenarioOrder) {
       const trials = request.trialsByScenario[scenario.id] ?? 1;
       if (!Number.isInteger(trials) || trials < 1) throw new Error(`invalid trial count for ${scenario.id}`);
+      deps.onProgress?.({ type: "candidate_started", candidateId, scenarioId: scenario.id });
       for (let trial = 1; trial <= trials; trial += 1) {
         if (!candidateBaseline.valid) {
           runs.push(await persistInvalidRun({ request, candidateId, scenario, trial, baseline: candidateBaseline, modelName: deps.modelName }));
@@ -382,7 +390,7 @@ export async function runAnalysis(request: AnalysisRequest, deps: OrchestratorDe
             scenarioHash: sha256(JSON.stringify(scenario)),
             trial,
             modelName: deps.modelName,
-            budget: request.budget,
+            budget: args.request.budget,
             sourcePathHash: sha256(path.resolve(sourceRoot)),
             basePathHash: sha256(path.resolve(request.baseRoot)),
             warnings,
@@ -396,6 +404,7 @@ export async function runAnalysis(request: AnalysisRequest, deps: OrchestratorDe
           await fs.rm(sandbox.root, { recursive: true, force: true });
         }
       }
+      deps.onProgress?.({ type: "candidate_completed", candidateId, scenarioId: scenario.id });
     }
   }
 
