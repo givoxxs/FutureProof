@@ -1,2 +1,31 @@
-.futureproof/
+# Secrets / local environment
+.env
+.env.*
+!.env.example
+
+# Dependencies / package-manager state
 node_modules/
+.pnpm-store/
+
+# FutureProof run artifacts
+.futureproof/
+
+# Build / test output
+dist/
+coverage/
+playwright-report/
+test-results/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
