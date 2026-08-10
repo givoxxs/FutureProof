@@ -5,6 +5,7 @@ import Fastify from "fastify";
 import { buildAnalysisReport, type AnalysisReport } from "../../../packages/engine/src/compare.ts";
 import { OpenAiCompatibleClient } from "../../../packages/engine/src/llm-client.ts";
 import { runAnalysis } from "../../../packages/engine/src/orchestrator.ts";
+import { OPENROUTER_DEFAULT_BASE_URL, OPENROUTER_DEFAULT_MODEL } from "../../../packages/engine/src/real-model-smoke.ts";
 import { loadFrozenScenarios } from "../../../packages/engine/src/scenario-validator.ts";
 import { registerAnalysisRoutes, type DemoAnalysisRunner } from "./analysis-routes.ts";
 import { ProgressBus } from "./progress-bus.ts";
@@ -19,9 +20,9 @@ function repositoryRoot(): string {
   return path.resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 }
 
-function requireEnv(name: "LLM_BASE_URL" | "LLM_API_KEY" | "LLM_MODEL"): string {
-  const value = process.env[name]?.trim();
-  if (!value) throw new Error(`${name} is required to run the live demo`);
+function requireOpenRouterApiKey(): string {
+  const value = process.env.OPENROUTER_API_KEY?.trim();
+  if (!value) throw new Error("OPENROUTER_API_KEY is required to run the live demo");
   return value;
 }
 
@@ -30,10 +31,11 @@ function createDefaultRunner(projectRoot: string): DemoAnalysisRunner {
     emit({ type: "analysis_started", analysisId });
     const fixtureRoot = path.join(projectRoot, "fixtures", "notification-demo");
     const scenarios = await loadFrozenScenarios(path.join(fixtureRoot, "scenarios.json"));
-    const modelName = requireEnv("LLM_MODEL");
+    const modelName = process.env.OPENROUTER_MODEL?.trim() || OPENROUTER_DEFAULT_MODEL;
+    const baseUrl = (process.env.OPENROUTER_BASE_URL?.trim() || OPENROUTER_DEFAULT_BASE_URL).replace(/\/+$/, "");
     const client = new OpenAiCompatibleClient({
-      baseUrl: requireEnv("LLM_BASE_URL"),
-      apiKey: requireEnv("LLM_API_KEY"),
+      baseUrl,
+      apiKey: requireOpenRouterApiKey(),
       model: modelName,
     });
 
