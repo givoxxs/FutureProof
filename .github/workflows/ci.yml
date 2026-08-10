@@ -21,19 +21,9 @@ jobs:
           corepack prepare pnpm@11.4.0 --activate
           pnpm --version
       - name: Install workspace dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Run engine and API tests
-        run: pnpm test
-      - name: Run dashboard component tests
-        run: pnpm --dir apps/web test
-      - name: Type-check dashboard
-        run: pnpm --dir apps/web run typecheck
-      - name: Build dashboard
-        run: pnpm --dir apps/web run build
-      - name: Install Playwright Chromium
-        run: pnpm --dir apps/web exec playwright install --with-deps chromium
-      - name: Run dashboard visual QA
-        run: pnpm --dir apps/web run visual:test
+        run: make install
+      - name: Run deterministic migration gate
+        run: make ci
       - name: Upload dashboard screenshots
         if: always()
         uses: actions/upload-artifact@v4
@@ -42,9 +32,3 @@ jobs:
           path: apps/web/test-results/**/*.png
           if-no-files-found: warn
           retention-days: 7
-      - name: Verify demo candidates
-        run: pnpm run demo:verify
-      - name: Type-check candidate A
-        run: pnpm --dir fixtures/notification-demo/candidate-a run build
-      - name: Type-check candidate B
-        run: pnpm --dir fixtures/notification-demo/candidate-b run build
