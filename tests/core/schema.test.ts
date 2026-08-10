@@ -115,3 +115,43 @@ test("risk dimensions stay within zero to one hundred", () => {
     overallRisk: 42,
   }).success, true);
 });
+
+test("structural deltas may be negative when a change improves structure", () => {
+  const result = ScenarioRunSummarySchema.safeParse({
+    analysisId: "analysis-1",
+    candidateId: "A",
+    scenarioId: "FR-01",
+    trial: 1,
+    status: "SUCCESS",
+    acceptancePassed: 2,
+    acceptanceFailed: 0,
+    existingPassed: 22,
+    existingFailed: 0,
+    buildPassed: true,
+    metrics: {
+      toolCalls: 2,
+      readOps: 0,
+      searchOps: 0,
+      editOps: 1,
+      testRuns: 1,
+      tokenUsage: 10,
+      wallTimeMs: 100,
+      filesTouched: 1,
+      modulesTouched: 1,
+      locAdded: 1,
+      locDeleted: 2,
+      publicApiFilesTouched: 0,
+      regressionSnapshots: [],
+      structuralDelta: {
+        cyclomaticComplexity: -1,
+        duplicateLineWindows: -2,
+        dependencyFanOut: 0,
+        fileSizeLines: -3,
+      },
+    },
+    remainingFailures: [],
+    patchPath: "patch.diff",
+    artifactDir: ".futureproof/runs/analysis-1/A/FR-01",
+  });
+  assert.equal(result.success, true);
+});
