@@ -13,6 +13,7 @@ import type {
   ScenarioStatus,
 } from "@futureproof/core";
 import { appendJsonl, writeJson } from "@futureproof/core/artifacts";
+import { analysisArtifactDir } from "@futureproof/core/paths";
 import { injectAcceptanceTest as injectAcceptanceTestDefault } from "./acceptance-injector.ts";
 import { runCodingAgent, type AgentEvent, type AgentStopReason } from "./coding-agent.ts";
 import { runAllowedCommand } from "./command-runner.ts";
@@ -214,7 +215,11 @@ async function buildPatchDiff(beforeRoot: string, afterRoot: string): Promise<st
 }
 
 function artifactDirFor(request: AnalysisRequest, candidateId: CandidateId, scenarioId: string, trial: number): string {
-  return path.join(request.runRoot, request.analysisId, "runs", candidateId, scenarioId, `trial-${trial}`);
+  return path.join(analysisArtifactDir(request.runRoot, request.analysisId), candidateId, scenarioId, `trial-${trial}`);
+}
+
+function sandboxRunRoot(request: AnalysisRequest): string {
+  return path.join(request.runRoot, ".futureproof", "workspaces");
 }
 
 async function persistInvalidRun(args: {
@@ -281,7 +286,7 @@ export async function runAnalysis(request: AnalysisRequest, deps: OrchestratorDe
   for (const candidateId of CANDIDATES) {
     const sandbox = await createSandbox({
       sourceRoot: request.candidates[candidateId],
-      runRoot: request.runRoot,
+      runRoot: sandboxRunRoot(request),
       analysisId: request.analysisId,
       candidateId,
       scenarioId: "__baseline__",
@@ -308,7 +313,7 @@ export async function runAnalysis(request: AnalysisRequest, deps: OrchestratorDe
         const sourceRoot = request.candidates[candidateId];
         const sandbox = await createSandbox({
           sourceRoot,
-          runRoot: request.runRoot,
+          runRoot: sandboxRunRoot(request),
           analysisId: request.analysisId,
           candidateId,
           scenarioId: scenario.id,
