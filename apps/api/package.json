@@ -1,0 +1,17 @@
+{
+  "name": "@futureproof/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "typecheck": "tsc -p ../../tsconfig.base.json --noEmit"
+  },
+  "dependencies": {
+    "@futureproof/core": "*",
+    "@futureproof/engine": "*",
+    "fastify": "^5.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0"
+  }
+}
