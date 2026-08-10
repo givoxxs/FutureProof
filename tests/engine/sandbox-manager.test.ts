@@ -35,6 +35,18 @@ test("baseline validation reports current tests and build as valid", async () =>
   });
 });
 
+test("baseline validation fails closed when a successful test command has no summary", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "futureproof-baseline-bad-"));
+  await fs.writeFile(path.join(root, "package.json"), JSON.stringify({
+    scripts: {
+      test: "node -e \"process.exit(0)\"",
+      build: "node -e \"process.exit(0)\"",
+    },
+  }), "utf8");
+  const sandbox = { root, candidateId: "A" as const, scenarioId: "FR-01", trial: 1 };
+  await assert.rejects(() => validateBaseline(sandbox), /test totals/i);
+});
+
 test("sandbox copy excludes node_modules and generated FutureProof artifacts", async () => {
   const decorated = await fs.mkdtemp(path.join(os.tmpdir(), "futureproof-source-"));
   await fs.cp(source, decorated, { recursive: true });
