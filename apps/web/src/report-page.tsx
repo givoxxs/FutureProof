@@ -3,6 +3,7 @@ import React from "react";
 export interface ReportPageProps {
   report: any;
   onOpenScenario: (scenarioId: string, trigger: HTMLButtonElement) => void;
+  onRerun?: () => void;
 }
 
 type RiskLevel = "LOW" | "MEDIUM" | "HIGH";
@@ -44,17 +45,18 @@ function statusTone(status: string): string {
   return "status-fail";
 }
 
-function CandidatePill({ label, subtitle, tone }: { label: string; subtitle: string; tone: "a" | "b" }) {
+function CandidatePill({ label, subtitle, tests, tone }: { label: string; subtitle: string; tests: string; tone: "a" | "b" }) {
   return <div className={`candidate-pill candidate-${tone}`}>
     <span className="candidate-dot" aria-hidden="true" />
-    <div><strong>{label}</strong><span>{subtitle}</span></div>
+    <div className="candidate-pill-copy"><strong>{label}</strong><span>{subtitle}</span></div>
+    <span className="candidate-test-proof">{tests}</span>
   </div>;
 }
 
 function RiskCard({ score, candidate }: { score: number; candidate: "A" | "B" }) {
   const level = riskLevel(score);
   return <section className={`risk-card risk-${level.toLowerCase()}`} aria-label={`Candidate ${candidate} Future Change Risk`}>
-    <div className="risk-card-label">Candidate {candidate}</div>
+    <div className="risk-card-label">Overall Future Risk</div>
     <div className="risk-score-row"><strong className="risk-score">{Math.round(score)}</strong><span>/100</span></div>
     <span className={`risk-badge ${level.toLowerCase()}`}>{level} RISK</span>
   </section>;
@@ -72,7 +74,7 @@ function Radar({ a, b }: { a: any; b: any }) {
     return `${center + Math.cos(angle) * radius * health},${center + Math.sin(angle) * radius * health}`;
   }).join(" ");
   return <section className="radar-panel" aria-label="Four-axis comparison">
-    <div className="section-kicker">Future resilience profile</div>
+    <span className="visually-hidden">Future resilience profile</span>
     <svg className="risk-radar" viewBox="0 0 164 164" role="img" aria-label="Candidate comparison radar">
       {[1, .66, .33].map((scale) => <polygon key={scale} className="radar-grid" points={axes.map((_, index) => {
         const angle = -Math.PI / 2 + index * Math.PI / 2;
@@ -83,8 +85,8 @@ function Radar({ a, b }: { a: any; b: any }) {
       <polygon points={points(a)} className="radar-a" />
       <polygon points={points(b)} className="radar-b" />
     </svg>
-    <div className="radar-labels" aria-hidden="true"><span>Resilience</span><span>Efficiency</span><span>Regression</span><span>Structure</span></div>
-    <div className="legend"><span className="legend-a">Candidate A</span><span className="legend-b">Candidate B</span></div>
+    <div className="radar-labels" aria-hidden="true"><span>Resilience</span><span>Effort</span><span>Regression Stability</span><span>Structural Stability</span></div>
+    <div className="legend"><span className="legend-a">PR #42</span><span className="legend-b">PR #84</span></div>
   </section>;
 }
 
@@ -96,25 +98,40 @@ function MetricCell({ label, a, b }: { label: string; a: string | number; b: str
   </div>;
 }
 
-export function ReportPage({ report, onOpenScenario }: ReportPageProps) {
+function exportJson(report: any): void {
+  const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `futureproof-${report.analysisId ?? "analysis"}.json`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+export function ReportPage({ report, onOpenScenario, onRerun }: ReportPageProps) {
   const a = report.candidates.A;
   const b = report.candidates.B;
   const structuralA = averageStructural(a);
   const structuralB = averageStructural(b);
   const total = report.scenarios.length;
+  const testsA = `${a.baseline.testsPassed}/${a.baseline.testsPassed + a.baseline.testsFailed} tests`;
+  const testsB = `${b.baseline.testsPassed}/${b.baseline.testsPassed + b.baseline.testsFailed} tests`;
 
   return <div className="report-page">
     <header className="report-header">
-      <div><p className="eyebrow">Controlled extensibility experiment</p><h1>Analysis Report</h1><p className="header-subtitle">Same future requirements. Same agent. Same budget. Measured outcomes.</p></div>
-      <div className="header-actions"><span className="completed-chip"><span aria-hidden="true">✓</span> Completed</span><button className="secondary-button" type="button">Export</button><button className="primary-button" type="button">Re-run analysis</button></div>
+      <div><h1>Analysis Report</h1><p className="header-subtitle">owner/shipping-notify <span aria-hidden="true">·</span> Compare PR #42 vs PR #84 <span aria-hidden="true">·</span> 5 Future Scenarios</p></div>
+      <div className="header-actions">
+        <span className="completed-chip"><span aria-hidden="true">✓</span> Completed</span>
+        <button className="secondary-button" type="button" onClick={() => void navigator.clipboard?.writeText(window.location.href)}>Share</button>
+        <button className="secondary-button" type="button" onClick={() => exportJson(report)}>Export</button>
+        <button className="rerun-button" type="button" onClick={onRerun}>↻ Re-run</button>
+      </div>
     </header>
 
     <section className="comparison-strip" aria-label="Candidate pull requests">
-      <div><span className="strip-label">Candidate implementation</span><CandidatePill label="PR #42" subtitle="A (Decoupled) · a1b2c3d" tone="a" /></div>
+      <div><CandidatePill label="PR #42" subtitle="A (Decoupled) · a1b2c3d" tests={testsA} tone="a" /></div>
       <div className="versus">VS</div>
-      <div><span className="strip-label">Candidate implementation</span><CandidatePill label="PR #84" subtitle="B (Coupled) · d4e5f6g" tone="b" /></div>
-      <div className="baseline-proof"><span>Current behavior</span><strong>{a.baseline.testsPassed}/{a.baseline.testsPassed + a.baseline.testsFailed} tests</strong></div>
-      <div className="baseline-proof"><span>Current behavior</span><strong>{b.baseline.testsPassed}/{b.baseline.testsPassed + b.baseline.testsFailed} tests</strong></div>
+      <div><CandidatePill label="PR #84" subtitle="B (Coupled) · d4e5f6g" tests={testsB} tone="b" /></div>
     </section>
 
     <section className="risk-overview" aria-label="Future Change Risk overview">
@@ -124,31 +141,34 @@ export function ReportPage({ report, onOpenScenario }: ReportPageProps) {
     </section>
 
     <section className="evidence-section">
-      <div className="section-heading"><div><p className="eyebrow">Measured evidence</p><h2>Observed future-change cost</h2></div><p>Raw outcomes are aggregated after the agent finishes; the agent never sees these metrics.</p></div>
+      <div className="section-heading compact-heading"><div><h2>Measured Evidence</h2></div><p>Same agent, same budget, observed outcomes only.</p></div>
       <div className="metrics-grid">
-        <MetricCell label="Future tasks passed" a={`${successCount(a)} / ${total}`} b={`${successCount(b)} / ${total}`} />
-        <MetricCell label="Avg. tool calls" a={a.averages.toolCalls} b={b.averages.toolCalls} />
-        <MetricCell label="Avg. files touched" a={a.averages.filesTouched} b={b.averages.filesTouched} />
-        <MetricCell label="Regression cycles" a={a.averages.regressionCycles} b={b.averages.regressionCycles} />
-        <MetricCell label="Token usage" a={formatTokens(a.averages.tokenUsage)} b={formatTokens(b.averages.tokenUsage)} />
-        <MetricCell label="Structural Delta" a={structuralA === null ? "n/a" : `${structuralA >= 0 ? "+" : ""}${structuralA.toFixed(1)}`} b={structuralB === null ? "n/a" : `${structuralB >= 0 ? "+" : ""}${structuralB.toFixed(1)}`} />
+        <MetricCell label="Tasks Passed" a={`${successCount(a)} / ${total}`} b={`${successCount(b)} / ${total}`} />
+        <MetricCell label="Agent Effort (Tool Calls)" a={a.averages.toolCalls} b={b.averages.toolCalls} />
+        <MetricCell label="Files Touched (Avg)" a={a.averages.filesTouched} b={b.averages.filesTouched} />
+        <MetricCell label="Regression Cycles (Avg)" a={a.averages.regressionCycles} b={b.averages.regressionCycles} />
+        <MetricCell label="Token Usage (Avg)" a={formatTokens(a.averages.tokenUsage)} b={formatTokens(b.averages.tokenUsage)} />
+        <MetricCell label="Structural Delta (Avg)" a={structuralA === null ? "n/a" : `${structuralA >= 0 ? "+" : ""}${structuralA.toFixed(1)}`} b={structuralB === null ? "n/a" : `${structuralB >= 0 ? "+" : ""}${structuralB.toFixed(1)}`} />
       </div>
     </section>
 
     <section className="scenario-section">
-      <div className="section-heading"><div><p className="eyebrow">Frozen scenario set</p><h2>Simulated Future Changes</h2></div><p>Generated from the base requirement before either candidate implementation is inspected.</p></div>
+      <div className="scenario-section-title">
+        <div className="scenario-heading-left"><h2>Scenario Results Overview</h2><div className="scenario-legend"><span className="legend-pass">Pass</span><span className="legend-partial">Partial</span><span className="legend-fail">Fail</span></div></div>
+        <span className="view-all-label">View all scenarios →</span>
+      </div>
       <div className="scenario-table-wrap">
         <table className="scenario-table">
-          <thead><tr><th>Future change</th><th>Difficulty</th><th>Candidate A</th><th>Candidate B</th><th>Evidence</th></tr></thead>
-          <tbody>{report.scenarios.map((scenario: any) => {
+          <thead><tr><th>Scenario</th><th>Difficulty</th><th>PR #42 (A)</th><th>PR #84 (B)</th><th /></tr></thead>
+          <tbody>{report.scenarios.map((scenario: any, index: number) => {
             const resultA = a.aggregatedScenarios.find((item: any) => item.scenarioId === scenario.id);
             const resultB = b.aggregatedScenarios.find((item: any) => item.scenarioId === scenario.id);
             return <tr key={scenario.id}>
-              <td><strong>{scenario.title}</strong><span className="scenario-id">{scenario.id} · {scenario.dimension}</span></td>
+              <td><div className="scenario-name-cell"><span className="scenario-number">{index + 1}</span><div><strong>{scenario.title}</strong><span className="scenario-id">{scenario.id} · {scenario.dimension}</span></div></div></td>
               <td><span className={`difficulty difficulty-${scenario.difficulty}`}>{scenario.difficulty}</span></td>
               <td><span className={`scenario-status ${statusTone(resultA?.status ?? "FAIL")}`}>{statusLabel(resultA?.status ?? "FAIL")}</span></td>
               <td><span className={`scenario-status ${statusTone(resultB?.status ?? "FAIL")}`}>{statusLabel(resultB?.status ?? "FAIL")}</span></td>
-              <td><button className="detail-button" type="button" aria-label={`View details for ${scenario.title}`} onClick={(event) => onOpenScenario(scenario.id, event.currentTarget)}>View details <span aria-hidden="true">→</span></button></td>
+              <td><button className="detail-button" type="button" aria-label={`View details for ${scenario.title}`} onClick={(event) => onOpenScenario(scenario.id, event.currentTarget)}>Details <span aria-hidden="true">→</span></button></td>
             </tr>;
           })}</tbody>
         </table>
