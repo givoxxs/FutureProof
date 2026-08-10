@@ -43,7 +43,7 @@ function Harness({ loader = vi.fn(async () => "artifact body") }: { loader?: (ca
 describe("ScenarioDrawer", () => {
   it("shows requirement, provenance, acceptance evidence, A/B metrics, regressions, and remaining failures", () => {
     render(<Harness />);
-    screen.getByRole("button", { name: "Open FR-04" }).click();
+    fireEvent.click(screen.getByRole("button", { name: "Open FR-04" }));
 
     expect(screen.getByRole("dialog", { name: /scenario detail/i })).toBeTruthy();
     expect(screen.getByText(/primary email provider fails/i)).toBeTruthy();
@@ -63,7 +63,7 @@ describe("ScenarioDrawer", () => {
     render(<Harness />);
     const trigger = screen.getByRole("button", { name: "Open FR-04" });
     trigger.focus();
-    trigger.click();
+    fireEvent.click(trigger);
     expect(screen.getByRole("dialog")).toBeTruthy();
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -73,8 +73,8 @@ describe("ScenarioDrawer", () => {
   it("loads patch and tool-event artifacts through opaque identifiers, never filesystem paths", async () => {
     const loader = vi.fn(async () => "artifact body");
     render(<Harness loader={loader} />);
-    screen.getByRole("button", { name: "Open FR-04" }).click();
-    screen.getByRole("button", { name: /view candidate b patch/i }).click();
+    fireEvent.click(screen.getByRole("button", { name: "Open FR-04" }));
+    fireEvent.click(screen.getByRole("button", { name: /view candidate b patch/i }));
     expect(await screen.findByText("artifact body")).toBeTruthy();
     expect(loader).toHaveBeenCalledWith("B", "patch");
   });
