@@ -137,6 +137,7 @@ test("golden pipeline runs 5 frozen scenarios with repeated hard trials, scores 
   ]);
   const exported = JSON.parse(jsonText);
   const manifest = JSON.parse(manifestText);
+  const hardScenarioTitle = analysisRequest.scenarios.find((scenario) => scenario.id === "FR-04")?.title;
 
   assert.equal(exported.analysisId, "golden-analysis");
   assert.equal(exported.scenarios.length, 5);
@@ -144,7 +145,7 @@ test("golden pipeline runs 5 frozen scenarios with repeated hard trials, scores 
   assert.equal(jsonText.includes("artifactDir"), false);
   assert.match(markdown, /Candidate A/);
   assert.match(markdown, /Candidate B/);
-  assert.match(markdown, /Provider Fallback/);
+  assert.ok(hardScenarioTitle && markdown.includes(hardScenarioTitle));
   assert.match(markdown, /3 trials/);
   assert.match(manifest.reportSha256, /^[a-f0-9]{64}$/);
   assert.match(manifest.markdownSha256, /^[a-f0-9]{64}$/);
