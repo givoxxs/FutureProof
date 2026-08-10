@@ -23,6 +23,18 @@ async function makeSandbox(): Promise<{ sandbox: Sandbox; outside: string }> {
   };
 }
 
+async function makeAncestorAliasedSandbox(): Promise<Sandbox> {
+  const parent = await fs.mkdtemp(path.join(os.tmpdir(), "futureproof-tools-alias-"));
+  const realParent = path.join(parent, "real");
+  const realRoot = path.join(realParent, "sandbox");
+  const aliasParent = path.join(parent, "alias");
+  await fs.mkdir(path.join(realRoot, "src"), { recursive: true });
+  await fs.writeFile(path.join(realRoot, "README.md"), "sandbox readme\n", "utf8");
+  await fs.writeFile(path.join(realRoot, "src", "value.ts"), "export const value = 1;\n", "utf8");
+  await fs.symlink(realParent, aliasParent, "dir");
+  return { root: path.join(aliasParent, "sandbox"), candidateId: "A", scenarioId: "FR-01", trial: 1 };
+}
+
 test("file tools operate on normal relative paths inside the sandbox", async () => {
   const { sandbox } = await makeSandbox();
   const tools = createAgentTools({ sandbox });
@@ -44,6 +56,13 @@ test("file tools operate on normal relative paths inside the sandbox", async () 
   });
   assert.equal((patched as { changed: boolean }).changed, true);
   assert.match(await fs.readFile(path.join(sandbox.root, "src", "value.ts"), "utf8"), /value = 'new'/);
+});
+
+test("list_files stays sandbox-relative when an ancestor path canonicalizes elsewhere", async () => {
+  const sandbox = await makeAncestorAliasedSandbox();
+  const tools = createAgentTools({ sandbox });
+  const listed = await tools.execute("list_files", { path: "." });
+  assert.deepEqual((listed as { files: string[] }).files, ["README.md", "src/value.ts"]);
 });
 
 test("all path-bearing tools reject traversal, absolute paths, and symlink escapes", async () => {
