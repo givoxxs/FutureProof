@@ -1,7 +1,10 @@
 {
   "name": "futureproof",
   "private": true,
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "test": "node --experimental-strip-types --test tests/**/*.test.ts",
     "typecheck": "tsc -p tsconfig.base.json --noEmit",
@@ -9,5 +12,6 @@
   },
   "devDependencies": {
     "typescript": "^5.0.0"
-  }
+  },
+  "type": "module"
 }

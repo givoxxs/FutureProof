@@ -1,0 +1,10 @@
+{
+  "name": "@futureproof/core",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/schema.ts",
+    "./artifacts": "./src/artifacts.ts",
+    "./paths": "./src/paths.ts"
+  }
+}
