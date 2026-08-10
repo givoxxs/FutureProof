@@ -2,9 +2,12 @@ import type { RegressionSnapshot } from "@futureproof/core";
 import type { Sandbox } from "./sandbox-manager.ts";
 import { runAllowedCommand } from "./command-runner.ts";
 
+const ANSI_ESCAPE = /\u001B\[[0-?]*[ -/]*[@-~]/g;
+
 export function parseNodeTestCounts(output: string): { passed: number; failed: number } | null {
-  const pass = /^# pass (\d+)$/m.exec(output);
-  const fail = /^# fail (\d+)$/m.exec(output);
+  const normalized = output.replace(ANSI_ESCAPE, "");
+  const pass = /^(?:#|ℹ)\s*pass\s+(\d+)\s*$/m.exec(normalized);
+  const fail = /^(?:#|ℹ)\s*fail\s+(\d+)\s*$/m.exec(normalized);
   if (!pass || !fail) return null;
   return { passed: Number(pass[1]), failed: Number(fail[1]) };
 }
