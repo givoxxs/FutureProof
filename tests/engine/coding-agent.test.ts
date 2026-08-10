@@ -71,7 +71,7 @@ test("scripted agent edits, runs tests, finishes, and persists deterministic eve
   const sandbox = await makeSandbox();
   const client = new ScriptedClient([
     { toolCalls: [{ id: "1", name: "apply_patch", arguments: { path: "src/value.txt", expected: "old", replacement: "new" } }] },
-    { toolCalls: [{ id: "2", name: "run_command", arguments: { command: "npm test" } }] },
+    { toolCalls: [{ id: "2", name: "run_command", arguments: { command: "pnpm test" } }] },
     { toolCalls: [] },
   ]);
 
