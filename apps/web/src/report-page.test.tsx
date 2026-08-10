@@ -103,4 +103,11 @@ describe("ReportPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /view details for provider fallback/i }));
     expect(onOpenScenario).toHaveBeenCalledWith("FR-04", expect.anything());
   });
+
+  it("downloads the deterministic server report bundle instead of rebuilding a browser blob", () => {
+    render(<ReportPage report={report as any} onOpenScenario={vi.fn()} />);
+    const exportLink = screen.getByRole("link", { name: "Export" });
+    expect(exportLink.getAttribute("href")).toBe("/api/analyses/analysis-ui/exports/report.json");
+    expect(exportLink.getAttribute("download")).toBe("futureproof-analysis-ui.json");
+  });
 });
