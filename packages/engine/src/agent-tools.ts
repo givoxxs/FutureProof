@@ -140,7 +140,7 @@ export function createAgentTools(options: AgentToolsOptions): AgentToolEnvironme
       description: "Run the repository test suite or build using the exact command policy.",
       inputSchema: {
         type: "object",
-        properties: { command: { type: "string", enum: ["npm test", "npm run build"] } },
+        properties: { command: { type: "string", enum: ["pnpm test", "pnpm run build"] } },
         required: ["command"],
         additionalProperties: false,
       },
