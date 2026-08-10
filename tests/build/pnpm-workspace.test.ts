@@ -84,6 +84,7 @@ test("gitignore protects local secrets and generated pnpm/test state", async () 
 test("Makefile exposes the supported pnpm developer workflow", async () => {
   const makefile = await readFile(path.join(root, "Makefile"), "utf8");
   for (const target of [
+    "help",
     "install",
     "test",
     "typecheck",
