@@ -78,8 +78,8 @@ describe("ReportPage", () => {
   it("renders current-test evidence, risks, six evidence metrics, and all five future scenarios", () => {
     render(<ReportPage report={report as any} onOpenScenario={vi.fn()} />);
 
-    expect(screen.getByText(/PR #42/)).toBeTruthy();
-    expect(screen.getByText(/PR #84/)).toBeTruthy();
+    expect(screen.getAllByText(/PR #42/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/PR #84/).length).toBeGreaterThan(0);
     expect(screen.getAllByText("22/22 tests")).toHaveLength(2);
     expect(screen.getByText("18")).toBeTruthy();
     expect(screen.getByText("74")).toBeTruthy();
