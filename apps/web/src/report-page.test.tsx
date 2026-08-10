@@ -1,6 +1,6 @@
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ReportPage } from "./report-page";
 
 afterEach(cleanup);
@@ -100,7 +100,7 @@ describe("ReportPage", () => {
   it("uses real buttons for scenario detail interactions", () => {
     const onOpenScenario = vi.fn();
     render(<ReportPage report={report as any} onOpenScenario={onOpenScenario} />);
-    screen.getByRole("button", { name: /view details for provider fallback/i }).click();
+    fireEvent.click(screen.getByRole("button", { name: /view details for provider fallback/i }));
     expect(onOpenScenario).toHaveBeenCalledWith("FR-04", expect.anything());
   });
 });
