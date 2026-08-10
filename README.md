@@ -29,7 +29,7 @@ FutureProof is designed to compare implementations rather than prompts or luck:
 - Scenario generation is blind to Candidate A/B implementation details.
 - Both candidates use the same model, agent tool surface, command allowlist, budgets, and scenario order.
 - Each `Candidate × Scenario × Trial` runs in an isolated sandbox.
-- Agent commands are restricted to the exact allowed test/build commands.
+- Agent commands are restricted to exact pnpm test/build commands.
 - Regression probes run after edits without exposing their hidden score to the agent.
 - Repeated trials use scalar medians and majority status.
 - Scores are deterministic; the LLM does not grade itself.
@@ -52,47 +52,95 @@ fixtures/
               frozen scenarios and acceptance tests
 tests/
   api/        lifecycle, SSE, path-safety and export contracts
+  build/      pnpm workspace, lockfile, ignore and Makefile contracts
   engine/     analyzer, agent, metrics, scoring and smoke contracts
   golden/     deterministic end-to-end analysis vertical slice
 ```
 
 See [Architecture](docs/architecture.md) for the data flow and trust boundaries.
 
-## Quick start
+## Requirements
 
-Requirements: Node.js 22+ and npm.
+- Node.js 22+
+- Corepack
+- GNU Make
+- pnpm **11.4.0** (pinned by the root `packageManager` field)
 
-```bash
-npm install
-npm test
-npm run demo:verify
-npm --prefix apps/web test
-npm --prefix apps/web run typecheck
-npm --prefix apps/web run build
-```
-
-The two fixture candidates can also be checked directly:
+Enable the pinned package manager and install the workspace:
 
 ```bash
-npm --prefix fixtures/notification-demo/candidate-a test
-npm --prefix fixtures/notification-demo/candidate-b test
+corepack enable
+corepack prepare pnpm@11.4.0 --activate
+make install
 ```
+
+The repository uses one `pnpm-workspace.yaml` and one root `pnpm-lock.yaml`. npm lockfiles are intentionally not committed.
+
+## Developer commands
+
+The Makefile is the recommended entrypoint:
+
+```bash
+make install       # pnpm install --frozen-lockfile
+make test          # engine/core/API + React component tests
+make typecheck     # root/web/candidate TypeScript checks
+make build         # production web build + candidate checks
+make demo-verify   # Candidate A and B current-behavior suites
+make visual-test   # install Chromium prerequisites + Playwright QA
+make ci            # complete deterministic local gate
+make dev-api       # Fastify API; loads .env when present
+make dev-web       # Vite dashboard
+make dev           # API + web together
+make smoke         # live OpenRouter JSON smoke when a key is configured
+```
+
+Package-local commands remain available through pnpm when useful, for example:
+
+```bash
+pnpm --dir apps/web test
+pnpm --dir fixtures/notification-demo/candidate-a test
+pnpm --dir fixtures/notification-demo/candidate-b test
+```
+
+## Configure OpenRouter
+
+FutureProof's live model path is OpenRouter-native while retaining the existing OpenAI-compatible transport internally.
+
+Create a local environment file:
+
+```bash
+cp .env.example .env
+```
+
+Then set your OpenRouter key:
+
+```env
+OPENROUTER_API_KEY=sk-or-v1-...
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_MODEL=deepseek/deepseek-v4-flash-0731
+```
+
+The default model is **DeepSeek V4 Flash 0731**. To use **GPT-5.6 Luna Pro**, change only one line:
+
+```env
+OPENROUTER_MODEL=openai/gpt-5.6-luna-pro
+```
+
+`OPENROUTER_BASE_URL` and `OPENROUTER_MODEL` have the documented defaults; `OPENROUTER_API_KEY` is required for a live run. `.env` and `.env.*` are ignored, while `.env.example` stays tracked.
 
 ## Run the live demo
 
-The default API runner is intentionally credential-gated. Configure an OpenAI-compatible endpoint:
+With `.env` configured:
 
 ```bash
-export LLM_BASE_URL="https://api.example.com/v1"
-export LLM_API_KEY="..."
-export LLM_MODEL="your-model"
+make dev
 ```
 
-Start the API and web app in separate terminals:
+Or run the services separately:
 
 ```bash
-npm --prefix apps/api run dev
-npm --prefix apps/web run dev
+make dev-api
+make dev-web
 ```
 
 Open the Vite URL (normally `http://localhost:5173`). Vite proxies `/api` to the Fastify server on port `3001`.
@@ -101,23 +149,25 @@ The browser never submits candidate filesystem paths. The hackathon endpoint own
 
 ## Deterministic CI vs. real-model smoke
 
-Normal CI does **not** spend model tokens. It uses injected fake clients for deterministic tests while still exercising the real orchestrator, artifact persistence, scoring, export, API, and browser flows.
+Normal CI does **not** spend model tokens. It installs the frozen pnpm workspace and executes `make ci`, which exercises deterministic fake-client tests while still running the real orchestrator, artifact persistence, scoring, exports, API, React components, production build, Playwright QA, and demo candidates.
 
-A separate manual GitHub Actions workflow, **FutureProof Real Model Smoke**, exists for a real OpenAI-compatible JSON completion. It requires:
+A separate manual GitHub Actions workflow, **FutureProof Real Model Smoke**, performs a real OpenRouter JSON completion. It uses:
 
-- repository secret `OPENAI_API_KEY`
-- repository variable `OPENAI_MODEL`
-- optional repository variable `OPENAI_BASE_URL` (defaults to `https://api.openai.com/v1`)
+- repository secret `OPENROUTER_API_KEY`
+- optional repository variable `OPENROUTER_MODEL` — defaults to `deepseek/deepseek-v4-flash-0731`
+- optional repository variable `OPENROUTER_BASE_URL` — defaults to `https://openrouter.ai/api/v1`
 
-The manual workflow sets `REQUIRE_REAL_MODEL=1`, so missing credentials fail explicitly instead of silently reporting a fake success.
+Set `OPENROUTER_MODEL=openai/gpt-5.6-luna-pro` if you want the smoke workflow to use GPT-5.6 Luna Pro instead.
 
-Local smoke behavior is intentionally softer:
+The manual workflow sets `REQUIRE_REAL_MODEL=1`, so a missing key fails explicitly instead of silently reporting fake success.
+
+Locally:
 
 ```bash
-OPENAI_API_KEY="..." OPENAI_MODEL="..." npm run smoke:real-model
+make smoke
 ```
 
-Without credentials, that local command reports `SKIPPED`.
+Without an OpenRouter key, the local smoke command reports `SKIPPED`; it never substitutes fake credentials for a live claim.
 
 ## Reports and reproducibility
 
@@ -157,7 +207,8 @@ Overall risk uses weights `40% / 25% / 20% / 15%` respectively. Missing regressi
 - Sandbox file tools reject absolute paths, traversal, and symlink escapes.
 - Reads are size-capped.
 - Patches must match exactly one expected occurrence.
-- Shell access is not exposed; only exact allowlisted commands can spawn.
+- Shell access is not exposed; only exact `pnpm test` / `pnpm run build` commands can spawn through the agent command surface.
+- Sandbox dependency preparation uses pnpm without a sandbox-local lockfile while root development/CI uses the committed frozen lockfile.
 - Export filenames are an exact allowlist: `report.json`, `report.md`, `manifest.json`.
 - Public analysis/scenario payloads strip internal artifact paths.
 
@@ -165,6 +216,10 @@ Overall risk uses weights `40% / 25% / 20% / 15%` respectively. Missing regressi
 
 The project contains automated checks for:
 
+- pnpm 11.4.0 workspace/lockfile and unique workspace package identities
+- `.env`/generated-state ignore contracts and tracked `.env.example`
+- Makefile target contracts
+- OpenRouter default model/base URL and one-variable model switching
 - 22/22 current behavior in both candidates
 - scenario neutrality and frozen acceptance contracts
 - sandbox/path/command isolation
@@ -186,4 +241,4 @@ For a judge-friendly walkthrough, use the [2-minute demo script](docs/demo-scrip
 
 FutureProof is a controlled stress test, not a proof of long-term maintainability. Scenario quality, model capability, budget choices, acceptance-test quality, and the chosen metrics all shape the result. Scores are comparative evidence for a defined experiment; they should not be interpreted as universal code-quality scores.
 
-The included fixture is deliberately small enough for a reproducible hackathon demonstration. Generalizing to arbitrary repositories would require broader package-manager/build-system support, stronger dependency isolation, and more domain-specific acceptance-test generation.
+The included fixture is deliberately small enough for a reproducible hackathon demonstration. The repository analyzer can distinguish npm and pnpm package contexts, but the current sandbox execution path is standardized on pnpm. Generalizing to arbitrary repositories would require broader build-system support, stronger dependency isolation, and more domain-specific acceptance-test generation.
