@@ -15,6 +15,10 @@ async function exists(relativePath: string): Promise<boolean> {
   }
 }
 
+async function readPackage(relativePath: string): Promise<any> {
+  return JSON.parse(await readFile(path.join(root, relativePath, "package.json"), "utf8"));
+}
+
 test("repository is a single pnpm 11.4.0 workspace", async () => {
   const packageJson = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
   const workspace = await readFile(path.join(root, "pnpm-workspace.yaml"), "utf8");
@@ -31,6 +35,17 @@ test("repository is a single pnpm 11.4.0 workspace", async () => {
     assert.match(workspace, new RegExp(entry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
   assert.equal(await exists("pnpm-lock.yaml"), true);
+});
+
+test("demo fixture workspaces have stable unique package names", async () => {
+  const base = await readPackage("fixtures/notification-demo/base");
+  const candidateA = await readPackage("fixtures/notification-demo/candidate-a");
+  const candidateB = await readPackage("fixtures/notification-demo/candidate-b");
+
+  assert.equal(base.name, "@futureproof/notification-demo-base");
+  assert.equal(candidateA.name, "@futureproof/notification-demo-candidate-a");
+  assert.equal(candidateB.name, "@futureproof/notification-demo-candidate-b");
+  assert.equal(new Set([base.name, candidateA.name, candidateB.name]).size, 3);
 });
 
 test("npm lockfiles are not committed after pnpm migration", async () => {
