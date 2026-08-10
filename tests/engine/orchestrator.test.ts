@@ -121,6 +121,7 @@ test("uses one shuffled scenario order fairly across both candidates and persist
     const metadataB = JSON.parse(await fs.readFile(path.join(runB.artifactDir, "metadata.json"), "utf8"));
     assert.equal(metadataA.scenarioHash, metadataB.scenarioHash);
     for (const run of [runA, runB]) {
+      assert.ok(run.artifactDir.startsWith(path.join(request.runRoot, ".futureproof", "runs", request.analysisId)));
       for (const file of ["metadata.json", "tool-events.jsonl", "test-results.json", "patch.diff", "metrics.json", "summary.json"]) {
         await fs.access(path.join(run.artifactDir, file));
       }
