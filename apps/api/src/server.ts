@@ -37,7 +37,8 @@ function createDefaultRunner(projectRoot: string): DemoAnalysisRunner {
       model: modelName,
     });
 
-    for (const scenario of scenarios) emit({ type: "scenario_started", analysisId, scenarioId: scenario.id });
+    const startedScenarios = new Set<string>();
+    const completedCandidates = new Map<string, Set<string>>();
     const execution = await runAnalysis({
       analysisId,
       baseRoot: path.join(fixtureRoot, "base"),
@@ -53,9 +54,21 @@ function createDefaultRunner(projectRoot: string): DemoAnalysisRunner {
     }, {
       client,
       modelName,
+      onProgress(event) {
+        if (!startedScenarios.has(event.scenarioId)) {
+          startedScenarios.add(event.scenarioId);
+          emit({ type: "scenario_started", analysisId, scenarioId: event.scenarioId });
+        }
+        emit({ type: event.type, analysisId, scenarioId: event.scenarioId, candidateId: event.candidateId });
+        if (event.type === "candidate_completed") {
+          const completed = completedCandidates.get(event.scenarioId) ?? new Set<string>();
+          completed.add(event.candidateId);
+          completedCandidates.set(event.scenarioId, completed);
+          if (completed.size === 2) emit({ type: "scenario_completed", analysisId, scenarioId: event.scenarioId });
+        }
+      },
     });
     const report = buildAnalysisReport(analysisId, scenarios, execution);
-    for (const scenario of scenarios) emit({ type: "scenario_completed", analysisId, scenarioId: scenario.id });
     emit({ type: "analysis_completed", analysisId });
     return report;
   };
