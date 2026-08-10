@@ -131,14 +131,14 @@ export async function runCodingAgent(args: {
 
     for (const call of turn.toolCalls) {
       if (toolCallsExecuted >= args.budget.maxToolCalls) return await stopForBudget("tool_budget");
-      if (call.name === "run_command" && call.arguments.command === "npm test" && testCycles >= args.budget.maxTestCycles) {
+      if (call.name === "run_command" && call.arguments.command === "pnpm test" && testCycles >= args.budget.maxTestCycles) {
         return await stopForBudget("tool_budget", { reasonDetail: "test_cycle_budget" });
       }
       const toolRemaining = deadline - performance.now();
       if (toolRemaining <= 0) return await stopForBudget("timeout");
 
       toolCallsExecuted += 1;
-      if (call.name === "run_command" && call.arguments.command === "npm test") testCycles += 1;
+      if (call.name === "run_command" && call.arguments.command === "pnpm test") testCycles += 1;
       await emit({ type: "tool_call", tool: call.name, payload: { id: call.id, arguments: call.arguments } });
 
       let result: Record<string, unknown>;
@@ -148,7 +148,7 @@ export async function runCodingAgent(args: {
         if (error instanceof DeadlineExceededError) return await stopForBudget("timeout");
         result = { ok: false, error: error instanceof Error ? error.message : String(error) };
       }
-      if (call.name === "run_command" && call.arguments.command === "npm test") {
+      if (call.name === "run_command" && call.arguments.command === "pnpm test") {
         lastTestPassed = typeof result.exitCode === "number" && result.exitCode === 0;
       }
       await emit({ type: "tool_result", tool: call.name, payload: { id: call.id, result: compactToolResult(result) } });
