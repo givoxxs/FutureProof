@@ -127,8 +127,12 @@ function isString(value: unknown): value is string {
   return typeof value === "string";
 }
 
+function isInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value);
+}
+
 function isNonNegativeInt(value: unknown): value is number {
-  return Number.isInteger(value) && typeof value === "number" && value >= 0;
+  return isInteger(value) && value >= 0;
 }
 
 function isNonNegativeNumber(value: unknown): value is number {
@@ -165,10 +169,10 @@ function parseRegressionSnapshot(value: unknown): value is RegressionSnapshot {
 
 function parseStructuralDelta(value: unknown): value is StructuralDelta {
   return isRecord(value)
-    && isNonNegativeInt(value.cyclomaticComplexity)
-    && isNonNegativeInt(value.duplicateLineWindows)
-    && isNonNegativeInt(value.dependencyFanOut)
-    && isNonNegativeInt(value.fileSizeLines);
+    && isInteger(value.cyclomaticComplexity)
+    && isInteger(value.duplicateLineWindows)
+    && isInteger(value.dependencyFanOut)
+    && isInteger(value.fileSizeLines);
 }
 
 function parseRunMetrics(value: unknown): value is RunMetrics {
