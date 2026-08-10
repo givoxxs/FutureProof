@@ -50,11 +50,9 @@ export function registerAnalysisRoutes(server: FastifyInstance, options: Analysi
   const states = new Map<string, AnalysisState>();
   const bus = options.bus ?? new ProgressBus();
 
-  server.post("/api/analyses/demo", {
-    schema: {
-      body: { type: "object", additionalProperties: false, properties: {} },
-    },
-  }, async (_request, reply) => {
+  server.post("/api/analyses/demo", async (request, reply) => {
+    const body = request.body as Record<string, unknown> | undefined;
+    if (body && Object.keys(body).length > 0) return reply.code(400).send({ error: "demo request does not accept filesystem paths or overrides" });
     const analysisId = options.idFactory();
     states.set(analysisId, { status: "running", analysisId });
     const emit = (event: ProgressEvent) => bus.publish({ ...event, analysisId });
