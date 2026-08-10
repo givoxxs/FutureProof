@@ -98,16 +98,6 @@ function MetricCell({ label, a, b }: { label: string; a: string | number; b: str
   </div>;
 }
 
-function exportJson(report: any): void {
-  const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `futureproof-${report.analysisId ?? "analysis"}.json`;
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
-
 export function ReportPage({ report, onOpenScenario, onRerun }: ReportPageProps) {
   const a = report.candidates.A;
   const b = report.candidates.B;
@@ -116,6 +106,7 @@ export function ReportPage({ report, onOpenScenario, onRerun }: ReportPageProps)
   const total = report.scenarios.length;
   const testsA = `${a.baseline.testsPassed}/${a.baseline.testsPassed + a.baseline.testsFailed} tests`;
   const testsB = `${b.baseline.testsPassed}/${b.baseline.testsPassed + b.baseline.testsFailed} tests`;
+  const exportHref = `/api/analyses/${encodeURIComponent(report.analysisId)}/exports/report.json`;
 
   return <div className="report-page">
     <header className="report-header">
@@ -123,7 +114,7 @@ export function ReportPage({ report, onOpenScenario, onRerun }: ReportPageProps)
       <div className="header-actions">
         <span className="completed-chip"><span aria-hidden="true">✓</span> Completed</span>
         <button className="secondary-button" type="button" onClick={() => void navigator.clipboard?.writeText(window.location.href)}>Share</button>
-        <button className="secondary-button" type="button" onClick={() => exportJson(report)}>Export</button>
+        <a className="secondary-button export-link" href={exportHref} download={`futureproof-${report.analysisId}.json`}>Export</a>
         <button className="rerun-button" type="button" onClick={onRerun}>↻ Re-run</button>
       </div>
     </header>
