@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { CandidateBaseline, CandidateId } from "@futureproof/core";
 import { runAllowedCommand } from "./command-runner.ts";
+import { parseNodeTestCounts } from "./regression-probe.ts";
 
 export interface Sandbox {
   root: string;
@@ -65,18 +66,12 @@ export async function createSandbox(args: {
   return { root: destination, candidateId: args.candidateId, scenarioId: args.scenarioId, trial: args.trial };
 }
 
-function parseNodeTestCounts(output: string): { passed: number; failed: number } {
-  const pass = /^# pass (\d+)$/m.exec(output);
-  const fail = /^# fail (\d+)$/m.exec(output);
-  return {
-    passed: pass ? Number(pass[1]) : 0,
-    failed: fail ? Number(fail[1]) : 0,
-  };
-}
-
 export async function validateBaseline(sandbox: Sandbox): Promise<CandidateBaseline> {
   const test = await runAllowedCommand(sandbox.root, "pnpm test", 30_000);
   const counts = parseNodeTestCounts(`${test.stdout}\n${test.stderr}`);
+  if (!counts) {
+    throw new Error(`test totals unavailable while validating baseline (exit ${test.exitCode})`);
+  }
   const build = await runAllowedCommand(sandbox.root, "pnpm run build", 30_000);
   const valid = test.exitCode === 0 && counts.failed === 0 && build.exitCode === 0;
   return {
