@@ -1,0 +1,11 @@
+.export-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.export-link:focus-visible {
+  outline: 3px solid rgba(91, 92, 226, .24);
+  outline-offset: 2px;
+}
