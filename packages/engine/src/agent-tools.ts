@@ -82,6 +82,7 @@ async function readCapped(file: string, relativePath: string): Promise<string> {
 
 async function walkFiles(root: string, relativeDir = "."): Promise<string[]> {
   const start = await resolveSafeExistingPath(root, relativeDir);
+  const canonicalRoot = await fs.realpath(path.resolve(root));
   const stat = await fs.stat(start.absolute);
   if (!stat.isDirectory()) return [start.relative];
   const files: string[] = [];
@@ -92,7 +93,7 @@ async function walkFiles(root: string, relativeDir = "."): Promise<string[]> {
     for (const entry of entries) {
       if (IGNORED_PARTS.has(entry.name) || entry.isSymbolicLink()) continue;
       const absolute = path.join(absoluteDir, entry.name);
-      const relative = path.relative(path.resolve(root), absolute).split(path.sep).join("/");
+      const relative = path.relative(canonicalRoot, absolute).split(path.sep).join("/");
       if (entry.isDirectory()) await walk(absolute);
       else if (entry.isFile()) files.push(relative);
     }
