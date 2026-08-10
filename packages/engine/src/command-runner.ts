@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 
-export type AllowedCommand = "npm test" | "npm run build";
+export type AllowedCommand = "pnpm test" | "pnpm run build";
 
 export class CommandPolicyError extends Error {
   constructor(command: string) {
@@ -17,8 +17,8 @@ export class CommandTimeoutError extends Error {
 }
 
 const COMMANDS: Record<AllowedCommand, readonly [string, readonly string[]]> = {
-  "npm test": ["npm", ["test"]],
-  "npm run build": ["npm", ["run", "build"]],
+  "pnpm test": ["pnpm", ["test"]],
+  "pnpm run build": ["pnpm", ["run", "build"]],
 };
 
 export async function runAllowedCommand(
