@@ -4,13 +4,14 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { CommandPolicyError, CommandTimeoutError, runAllowedCommand } from "../../packages/engine/src/command-runner.ts";
+import { parseNodeTestCounts } from "../../packages/engine/src/regression-probe.ts";
 
 const candidateA = path.resolve("fixtures/notification-demo/candidate-a");
 
 test("allows only the exact pnpm test and pnpm run build commands", async () => {
   const testResult = await runAllowedCommand(candidateA, "pnpm test", 10_000);
   assert.equal(testResult.exitCode, 0);
-  assert.match(`${testResult.stdout}\n${testResult.stderr}`, /# pass 22/);
+  assert.deepEqual(parseNodeTestCounts(`${testResult.stdout}\n${testResult.stderr}`), { passed: 22, failed: 0 });
 
   const buildResult = await runAllowedCommand(candidateA, "pnpm run build", 10_000);
   assert.equal(buildResult.exitCode, 0);
