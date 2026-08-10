@@ -81,7 +81,7 @@ Semantics:
 - `build`: production web build plus candidate typechecks
 - `dev-api`: load `.env` when present, then run the API dev process
 - `dev-web`: run the Vite dev process
-- `dev`: print or launch the two development processes through a simple Make orchestration that remains understandable and Unix-friendly; do not add a process-manager dependency solely for this target
+- `dev`: launch API and web development processes through a simple shell trap/wait orchestration; do not add a process-manager dependency solely for this target
 - `visual-test`: install/use Playwright browser prerequisites as documented and run visual tests
 - `demo-verify`: run Candidate A and Candidate B current-behavior tests
 - `smoke`: run the real-model smoke command
@@ -128,7 +128,7 @@ Update only the configuration boundary:
 
 No provider-specific routing policy is added in this migration. OpenRouter provider selection remains at its default unless configured later.
 
-## `.env` behavior
+## `.env` behavior and ignore policy
 
 `.env.example` is safe to commit and contains placeholders only.
 
@@ -141,6 +141,44 @@ make dev
 ```
 
 The Makefile may source `.env` for local commands that need model credentials. `.env` remains ignored by Git.
+
+The root `.gitignore` must explicitly cover local secrets and generated artifacts without hiding committed examples or source files:
+
+```gitignore
+# Secrets / local environment
+.env
+.env.*
+!.env.example
+
+# Dependencies / package-manager state
+node_modules/
+.pnpm-store/
+
+# FutureProof run artifacts
+.futureproof/
+
+# Build / test output
+dist/
+coverage/
+playwright-report/
+test-results/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+```
+
+Do not ignore `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `Makefile`, `.env.example`, source maps embedded in committed source, or any fixture source/test files.
 
 ## GitHub Actions
 
@@ -183,15 +221,16 @@ The migration is accepted only if all of the following are true on the final bra
 2. A root `pnpm-lock.yaml` exists and `pnpm install --frozen-lockfile` succeeds.
 3. `packageManager` pins pnpm 11.4.0.
 4. `pnpm-workspace.yaml` contains all application/package/demo workspaces.
-5. `make ci` succeeds without model credentials.
-6. Existing 76 engine/core/API/golden/smoke-contract tests still pass.
-7. Existing 6 React component tests still pass.
-8. Web typecheck and Vite production build pass.
-9. Existing 2 Playwright visual tests pass.
-10. Candidate A remains 22/22 and Candidate B remains 22/22 for current behavior.
-11. Both candidate TypeScript builds/typechecks pass.
-12. `.env.example`, API runtime, smoke helper, workflow, and README consistently use `OPENROUTER_*` names.
-13. Changing `OPENROUTER_MODEL` between `deepseek/deepseek-v4-flash-0731` and `openai/gpt-5.6-luna-pro` requires no code change.
+5. `.gitignore` ignores `.env`, `.env.*` except `.env.example`, `.pnpm-store`, dependencies, generated FutureProof artifacts, build/test output, logs, and common editor/OS junk.
+6. `make ci` succeeds without model credentials.
+7. Existing 76 engine/core/API/golden/smoke-contract tests still pass.
+8. Existing 6 React component tests still pass.
+9. Web typecheck and Vite production build pass.
+10. Existing 2 Playwright visual tests pass.
+11. Candidate A remains 22/22 and Candidate B remains 22/22 for current behavior.
+12. Both candidate TypeScript builds/typechecks pass.
+13. `.env.example`, API runtime, smoke helper, workflow, and README consistently use `OPENROUTER_*` names.
+14. Changing `OPENROUTER_MODEL` between `deepseek/deepseek-v4-flash-0731` and `openai/gpt-5.6-luna-pro` requires no code change.
 
 ## Non-goals
 
