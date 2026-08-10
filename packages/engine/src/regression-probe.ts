@@ -11,7 +11,7 @@ export function parseNodeTestCounts(output: string): { passed: number; failed: n
 
 export async function probeRegression(sandbox: Sandbox, cycle: number, timeoutMs = 30_000): Promise<RegressionSnapshot> {
   if (!Number.isInteger(cycle) || cycle < 1) throw new Error("cycle must be a positive integer");
-  const result = await runAllowedCommand(sandbox.root, "npm test", timeoutMs);
+  const result = await runAllowedCommand(sandbox.root, "pnpm test", timeoutMs);
   const counts = parseNodeTestCounts(`${result.stdout}\n${result.stderr}`);
   if (!counts) {
     throw new Error(`test totals unavailable while probing regression (exit ${result.exitCode})`);
