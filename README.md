@@ -83,7 +83,7 @@ The Makefile is the recommended entrypoint:
 ```bash
 make install       # pnpm install --frozen-lockfile
 make test          # engine/core/API + React component tests
-make typecheck     # root/web/candidate TypeScript checks
+make typecheck     # web + Candidate A/B TypeScript checks
 make build         # production web build + candidate checks
 make demo-verify   # Candidate A and B current-behavior suites
 make visual-test   # install Chromium prerequisites + Playwright QA
@@ -228,17 +228,3 @@ The project contains automated checks for:
 - repeated-trial aggregation and deterministic scoring
 - API lifecycle, SSE progress and artifact security
 - safe reproducible exports with checksums
-- a 14-run golden vertical slice
-- React component behavior and keyboard-accessible evidence drawer
-- desktop/mobile Playwright visual QA and mobile overflow checks
-- real-model smoke configuration/response contracts
-
-## Demo
-
-For a judge-friendly walkthrough, use the [2-minute demo script](docs/demo-script.md).
-
-## Limitations
-
-FutureProof is a controlled stress test, not a proof of long-term maintainability. Scenario quality, model capability, budget choices, acceptance-test quality, and the chosen metrics all shape the result. Scores are comparative evidence for a defined experiment; they should not be interpreted as universal code-quality scores.
-
-The included fixture is deliberately small enough for a reproducible hackathon demonstration. The repository analyzer can distinguish npm and pnpm package contexts, but the current sandbox execution path is standardized on pnpm. Generalizing to arbitrary repositories would require broader build-system support, stronger dependency isolation, and more domain-specific acceptance-test generation.
