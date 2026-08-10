@@ -62,8 +62,8 @@ test("all path-bearing tools reject traversal, absolute paths, and symlink escap
 
 test("apply_patch requires expected text to match exactly once", async () => {
   const { sandbox } = await makeSandbox();
-  const tools = createAgentTools({ sandbox });
   await fs.writeFile(path.join(sandbox.root, "src", "value.ts"), "same\nsame\n", "utf8");
+  const tools = createAgentTools({ sandbox });
 
   await assert.rejects(
     () => tools.execute("apply_patch", { path: "src/value.ts", expected: "same", replacement: "new" }),
@@ -82,11 +82,14 @@ test("read_file rejects files larger than 200 KB", async () => {
   await assert.rejects(() => tools.execute("read_file", { path: "src/large.ts" }), AgentFileTooLargeError);
 });
 
-test("run_command delegates only exact allowed commands", async () => {
+test("run_command delegates only exact pnpm commands", async () => {
   const { sandbox } = await makeSandbox();
   await fs.writeFile(path.join(sandbox.root, "package.json"), JSON.stringify({ scripts: { test: "node -e \"process.exit(0)\"", build: "node -e \"process.exit(0)\"" } }), "utf8");
   const tools = createAgentTools({ sandbox, commandTimeoutMs: 2_000 });
-  const result = await tools.execute("run_command", { command: "npm test" });
+  const definition = tools.definitions.find((tool) => tool.name === "run_command");
+  assert.deepEqual((definition?.inputSchema.properties as any).command.enum, ["pnpm test", "pnpm run build"]);
+  const result = await tools.execute("run_command", { command: "pnpm test" });
   assert.equal((result as { exitCode: number }).exitCode, 0);
+  await assert.rejects(() => tools.execute("run_command", { command: "npm test" }));
   await assert.rejects(() => tools.execute("run_command", { command: "curl https://example.com" }));
 });
