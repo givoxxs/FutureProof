@@ -1,0 +1,27 @@
+name: FutureProof CI
+
+on:
+  push:
+    branches:
+      - feat/futureproof-mvp
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install workspace dependencies
+        run: npm install --ignore-scripts
+      - name: Run engine and API tests
+        run: npm test
+      - name: Verify demo candidates
+        run: npm run demo:verify
+      - name: Type-check candidate A
+        run: npm --prefix fixtures/notification-demo/candidate-a run build
+      - name: Type-check candidate B
+        run: npm --prefix fixtures/notification-demo/candidate-b run build
