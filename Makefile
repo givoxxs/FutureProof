@@ -11,7 +11,6 @@ test:
 	$(PNPM) --dir apps/web test
 
 typecheck:
-	$(PNPM) run typecheck
 	$(PNPM) --dir apps/web run typecheck
 	$(PNPM) --dir fixtures/notification-demo/candidate-a run build
 	$(PNPM) --dir fixtures/notification-demo/candidate-b run build
