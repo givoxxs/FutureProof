@@ -5,7 +5,7 @@ import ts from "typescript";
 export interface RepoSummary {
   root: string;
   language: "typescript" | "javascript" | "mixed";
-  packageManager: "npm";
+  packageManager: "npm" | "pnpm";
   scripts: { test?: string; build?: string };
   sourceFiles: string[];
   testFiles: string[];
@@ -87,15 +87,26 @@ function collectImports(sourceFile: ts.SourceFile): string[] {
   return imports;
 }
 
-async function detectPackageManager(root: string, packageJson: Record<string, unknown>): Promise<"npm"> {
+async function findAncestorMarker(start: string, marker: string): Promise<boolean> {
+  let current = path.resolve(start);
+  while (true) {
+    if (await exists(path.join(current, marker))) return true;
+    const parent = path.dirname(current);
+    if (parent === current) return false;
+    current = parent;
+  }
+}
+
+async function detectPackageManager(root: string, packageJson: Record<string, unknown>): Promise<"npm" | "pnpm"> {
   const declared = typeof packageJson.packageManager === "string" ? packageJson.packageManager : "";
-  if (declared && !declared.startsWith("npm@")) {
+  if (declared) {
+    if (declared.startsWith("pnpm@")) return "pnpm";
+    if (declared.startsWith("npm@")) return "npm";
     throw new UnsupportedRepositoryError(`unsupported package manager: ${declared}`);
   }
-  if (await exists(path.join(root, "pnpm-lock.yaml"))) {
-    throw new UnsupportedRepositoryError("pnpm repositories are not supported");
-  }
-  if (await exists(path.join(root, "yarn.lock"))) {
+
+  if (await findAncestorMarker(root, "pnpm-lock.yaml")) return "pnpm";
+  if (await findAncestorMarker(root, "yarn.lock")) {
     throw new UnsupportedRepositoryError("yarn repositories are not supported");
   }
   return "npm";
