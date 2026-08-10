@@ -7,17 +7,26 @@ import { CommandPolicyError, CommandTimeoutError, runAllowedCommand } from "../.
 
 const candidateA = path.resolve("fixtures/notification-demo/candidate-a");
 
-test("allows only the exact npm test and npm run build commands", async () => {
-  const testResult = await runAllowedCommand(candidateA, "npm test", 10_000);
+test("allows only the exact pnpm test and pnpm run build commands", async () => {
+  const testResult = await runAllowedCommand(candidateA, "pnpm test", 10_000);
   assert.equal(testResult.exitCode, 0);
   assert.match(`${testResult.stdout}\n${testResult.stderr}`, /# pass 22/);
 
-  const buildResult = await runAllowedCommand(candidateA, "npm run build", 10_000);
+  const buildResult = await runAllowedCommand(candidateA, "pnpm run build", 10_000);
   assert.equal(buildResult.exitCode, 0);
 });
 
-test("rejects dangerous or arbitrary commands before spawning", async () => {
-  const disallowed = ["curl https://example.com", "git push", "rm -rf /", "npm test && curl x", "npm test > out.txt", "npm test -- --watch"];
+test("rejects dangerous, npm, or arbitrary commands before spawning", async () => {
+  const disallowed = [
+    "curl https://example.com",
+    "git push",
+    "rm -rf /",
+    "pnpm test && curl x",
+    "pnpm test > out.txt",
+    "pnpm test -- --watch",
+    "npm test",
+    "npm run build",
+  ];
   for (const command of disallowed) {
     await assert.rejects(
       () => runAllowedCommand(candidateA, command as any, 1000),
@@ -31,5 +40,5 @@ test("kills commands that exceed the timeout", async () => {
   await fs.writeFile(path.join(root, "package.json"), JSON.stringify({
     scripts: { test: "node -e \"setTimeout(() => {}, 10000)\"" },
   }), "utf8");
-  await assert.rejects(() => runAllowedCommand(root, "npm test", 20), CommandTimeoutError);
+  await assert.rejects(() => runAllowedCommand(root, "pnpm test", 20), CommandTimeoutError);
 });
