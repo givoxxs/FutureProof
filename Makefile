@@ -1,7 +1,22 @@
 SHELL := /bin/bash
 PNPM := pnpm
 
-.PHONY: install test typecheck build dev dev-api dev-web visual-test demo-verify smoke ci
+.PHONY: help install test typecheck build dev dev-api dev-web visual-test demo-verify smoke ci
+
+help:
+	@printf '%s\n' \
+		'FutureProof developer commands:' \
+		'  make install       Install the frozen pnpm workspace' \
+		'  make test          Run engine/core/API and React tests' \
+		'  make typecheck     Typecheck web and demo candidates' \
+		'  make build         Build web and verify demo candidates' \
+		'  make dev           Run API and web development servers' \
+		'  make dev-api       Run the Fastify API' \
+		'  make dev-web       Run the Vite dashboard' \
+		'  make visual-test   Run Playwright visual QA' \
+		'  make demo-verify   Verify Candidate A/B current behavior' \
+		'  make smoke         Run the live OpenRouter smoke check' \
+		'  make ci            Run the complete deterministic gate'
 
 install:
 	$(PNPM) install --frozen-lockfile
