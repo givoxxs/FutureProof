@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import { analysisArtifactDir } from "@futureproof/core/paths";
 import { writeJson } from "@futureproof/core/artifacts";
 import type { AnalysisReport } from "../../../packages/engine/src/compare.ts";
+import { writeReportBundle } from "../../../packages/engine/src/report-export.ts";
 import { ProgressBus, type ProgressEvent } from "./progress-bus.ts";
 
 export type AnalysisState =
@@ -22,6 +23,14 @@ export interface AnalysisRouteOptions {
   idFactory: () => string;
   bus?: ProgressBus;
 }
+
+const EXPORTS = {
+  "report.json": { filename: "report.json", contentType: "application/json; charset=utf-8" },
+  "report.md": { filename: "report.md", contentType: "text/markdown; charset=utf-8" },
+  "manifest.json": { filename: "manifest.json", contentType: "application/json; charset=utf-8" },
+} as const;
+
+type ExportName = keyof typeof EXPORTS;
 
 function sendSse(reply: FastifyReply, events: ProgressEvent[]): void {
   reply.header("content-type", "text/event-stream; charset=utf-8");
@@ -60,6 +69,10 @@ function safeArtifactPath(projectRoot: string, analysisId: string, candidateId: 
   return file;
 }
 
+function exportFilePath(projectRoot: string, analysisId: string, name: ExportName): string {
+  return path.join(analysisArtifactDir(projectRoot, analysisId), "exports", EXPORTS[name].filename);
+}
+
 export function registerAnalysisRoutes(server: FastifyInstance, options: AnalysisRouteOptions) {
   const states = new Map<string, AnalysisState>();
   const bus = options.bus ?? new ProgressBus();
@@ -76,6 +89,7 @@ export function registerAnalysisRoutes(server: FastifyInstance, options: Analysi
         const report = await options.runDemo({ analysisId, emit });
         const reportFile = path.join(analysisArtifactDir(options.projectRoot, analysisId), "report.json");
         await writeJson(reportFile, report);
+        await writeReportBundle(options.projectRoot, report);
         states.set(analysisId, { status: "completed", analysisId, report });
         if (!bus.events(analysisId).some((event) => event.type === "analysis_completed")) {
           emit({ type: "analysis_completed", analysisId });
@@ -103,6 +117,21 @@ export function registerAnalysisRoutes(server: FastifyInstance, options: Analysi
     const payload = scenarioPayload(state.report, request.params.scenarioId);
     if (!payload) return reply.code(404).send({ error: "scenario not found" });
     return payload;
+  });
+
+  server.get<{ Params: { analysisId: string; exportName: string } }>("/api/analyses/:analysisId/exports/:exportName", async (request, reply) => {
+    const state = states.get(request.params.analysisId);
+    if (!state) return reply.code(404).send({ error: "analysis not found" });
+    if (state.status !== "completed") return reply.code(409).send({ error: `analysis is ${state.status}` });
+    if (!(request.params.exportName in EXPORTS)) return reply.code(404).send({ error: "export not found" });
+
+    const name = request.params.exportName as ExportName;
+    try {
+      const content = await fs.readFile(exportFilePath(options.projectRoot, request.params.analysisId, name), "utf8");
+      return reply.type(EXPORTS[name].contentType).send(content);
+    } catch {
+      return reply.code(404).send({ error: "export not found" });
+    }
   });
 
   server.get<{
