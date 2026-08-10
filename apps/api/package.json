@@ -7,8 +7,8 @@
     "typecheck": "tsc -p ../../tsconfig.base.json --noEmit"
   },
   "dependencies": {
-    "@futureproof/core": "*",
-    "@futureproof/engine": "*",
+    "@futureproof/core": "workspace:*",
+    "@futureproof/engine": "workspace:*",
     "fastify": "^5.0.0"
   },
   "devDependencies": {
