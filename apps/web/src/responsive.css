@@ -1,0 +1,74 @@
+@media (max-width: 720px) {
+  .comparison-strip {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .comparison-strip > div {
+    min-width: 0;
+  }
+
+  .versus {
+    display: none;
+  }
+
+  .candidate-pill {
+    width: 100%;
+  }
+
+  .candidate-pill .candidate-test-proof {
+    display: none;
+  }
+
+  .candidate-pill-copy span {
+    white-space: normal;
+  }
+
+  .scenario-table {
+    min-width: 0;
+    width: 100%;
+    table-layout: fixed;
+  }
+
+  .scenario-table th:nth-child(2),
+  .scenario-table td:nth-child(2) {
+    display: none;
+  }
+
+  .scenario-table th:nth-child(1) { width: 48%; }
+  .scenario-table th:nth-child(3),
+  .scenario-table th:nth-child(4) { width: 14%; }
+  .scenario-table th:nth-child(5) { width: 24%; }
+
+  .scenario-name-cell {
+    gap: 4px;
+  }
+
+  .scenario-number {
+    display: none;
+  }
+
+  .scenario-table td,
+  .scenario-table th {
+    padding-left: 5px;
+    padding-right: 5px;
+  }
+
+  .scenario-table td strong {
+    font-size: 9px;
+  }
+
+  .scenario-status {
+    min-width: 0;
+    width: 100%;
+    padding-left: 2px;
+    padding-right: 2px;
+    font-size: 7px;
+    text-align: center;
+  }
+
+  .detail-button {
+    font-size: 8px;
+    white-space: nowrap;
+  }
+}
