@@ -390,7 +390,7 @@ export async function runAnalysis(request: AnalysisRequest, deps: OrchestratorDe
             scenarioHash: sha256(JSON.stringify(scenario)),
             trial,
             modelName: deps.modelName,
-            budget: args.request.budget,
+            budget: request.budget,
             sourcePathHash: sha256(path.resolve(sourceRoot)),
             basePathHash: sha256(path.resolve(request.baseRoot)),
             warnings,
