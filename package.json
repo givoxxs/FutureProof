@@ -8,7 +8,8 @@
   "scripts": {
     "test": "node --experimental-strip-types --test \"tests/**/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.base.json --noEmit",
-    "demo:verify": "npm --prefix fixtures/notification-demo/candidate-a test && npm --prefix fixtures/notification-demo/candidate-b test"
+    "demo:verify": "npm --prefix fixtures/notification-demo/candidate-a test && npm --prefix fixtures/notification-demo/candidate-b test",
+    "smoke:real-model": "node --experimental-strip-types scripts/real-model-smoke.ts"
   },
   "devDependencies": {
     "typescript": "^5.0.0"
