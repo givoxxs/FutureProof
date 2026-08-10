@@ -54,6 +54,7 @@ function makeDeps(options: { invalidB?: boolean } = {}) {
   const sandboxRoots: string[] = [];
   const agentCalls: Array<{ candidateId: string; scenarioId: string; budget: AgentBudget; client: ToolCallingLlmClient }> = [];
   const injections: Array<{ candidateId: string; scenarioId: string; bytes: string }> = [];
+  const progressEvents: Array<{ type: string; candidateId: string; scenarioId: string }> = [];
   let sandboxSeq = 0;
   const randomValues = [0.91, 0.17, 0.73, 0.31, 0.55];
   let randomIndex = 0;
@@ -62,6 +63,7 @@ function makeDeps(options: { invalidB?: boolean } = {}) {
     client: fakeClient,
     modelName: "fake-model",
     random: () => randomValues[randomIndex++ % randomValues.length]!,
+    onProgress(event) { progressEvents.push(event); },
     async createSandbox(args) {
       const root = await fs.mkdtemp(path.join(os.tmpdir(), `futureproof-orch-sb-${args.candidateId}-${sandboxSeq++}-`));
       await fs.mkdir(path.join(root, "src"), { recursive: true });
@@ -90,12 +92,12 @@ function makeDeps(options: { invalidB?: boolean } = {}) {
     async collectMetrics() { return zeroMetrics(); },
   };
 
-  return { deps, sandboxRoots, agentCalls, injections };
+  return { deps, sandboxRoots, agentCalls, injections, progressEvents };
 }
 
 test("uses one shuffled scenario order fairly across both candidates and persists complete artifacts", async () => {
   const request = await makeRequest();
-  const { deps, sandboxRoots, agentCalls, injections } = makeDeps();
+  const { deps, sandboxRoots, agentCalls, injections, progressEvents } = makeDeps();
   const execution = await runAnalysis(request, deps);
 
   assert.equal(execution.runs.length, 10);
@@ -107,6 +109,13 @@ test("uses one shuffled scenario order fairly across both candidates and persist
   assert.ok(agentCalls.every((call) => call.client === fakeClient));
   assert.ok(agentCalls.every((call) => JSON.stringify(call.budget) === JSON.stringify(budget)));
   assert.equal(new Set(sandboxRoots).size, sandboxRoots.length);
+  assert.equal(progressEvents.length, 20);
+  for (const candidateId of ["A", "B"] as const) {
+    for (const scenarioId of orderA) {
+      assert.ok(progressEvents.some((event) => event.type === "candidate_started" && event.candidateId === candidateId && event.scenarioId === scenarioId));
+      assert.ok(progressEvents.some((event) => event.type === "candidate_completed" && event.candidateId === candidateId && event.scenarioId === scenarioId));
+    }
+  }
   for (const scenario of request.scenarios) {
     const injectedA = injections.find((item) => item.candidateId === "A" && item.scenarioId === scenario.id);
     const injectedB = injections.find((item) => item.candidateId === "B" && item.scenarioId === scenario.id);
