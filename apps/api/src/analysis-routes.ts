@@ -44,6 +44,16 @@ function publicRun(run: any) {
   return safe;
 }
 
+function publicReport(report: AnalysisReport) {
+  return {
+    ...report,
+    candidates: {
+      A: { ...report.candidates.A, scenarioRuns: report.candidates.A.scenarioRuns.map(publicRun) },
+      B: { ...report.candidates.B, scenarioRuns: report.candidates.B.scenarioRuns.map(publicRun) },
+    },
+  };
+}
+
 function scenarioPayload(report: AnalysisReport, scenarioId: string) {
   const scenario = report.scenarios.find((item) => item.id === scenarioId);
   if (!scenario) return null;
@@ -107,6 +117,7 @@ export function registerAnalysisRoutes(server: FastifyInstance, options: Analysi
   server.get<{ Params: { analysisId: string } }>("/api/analyses/:analysisId", async (request, reply) => {
     const state = states.get(request.params.analysisId);
     if (!state) return reply.code(404).send({ error: "analysis not found" });
+    if (state.status === "completed") return { ...state, report: publicReport(state.report) };
     return state;
   });
 
