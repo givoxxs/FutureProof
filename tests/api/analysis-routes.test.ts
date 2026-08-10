@@ -57,13 +57,14 @@ const report = {
 } as any;
 
 async function waitForCompleted(server: ReturnType<typeof buildServer>, id: string) {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
+  const deadline = Date.now() + 2_000;
+  while (Date.now() < deadline) {
     const response = await server.inject({ method: "GET", url: `/api/analyses/${id}` });
     const body = response.json();
     if (body.status === "completed" || body.status === "failed") return body;
-    await new Promise((resolve) => setTimeout(resolve, 2));
+    await new Promise((resolve) => setTimeout(resolve, 5));
   }
-  throw new Error("analysis did not complete in test window");
+  throw new Error("analysis did not complete within 2 seconds");
 }
 
 test("POST starts demo-owned analysis, GET exposes running then completed report", async () => {
