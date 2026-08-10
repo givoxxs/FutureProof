@@ -9,7 +9,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -21,8 +21,22 @@ jobs:
         run: npm test
       - name: Run dashboard component tests
         run: npm --prefix apps/web test
+      - name: Type-check dashboard
+        run: npm --prefix apps/web run typecheck
       - name: Build dashboard
         run: npm --prefix apps/web run build
+      - name: Install Playwright Chromium
+        run: cd apps/web && npx playwright install --with-deps chromium
+      - name: Run dashboard visual QA
+        run: npm --prefix apps/web run visual:test
+      - name: Upload dashboard screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: futureproof-visual-qa
+          path: apps/web/test-results/**/*.png
+          if-no-files-found: warn
+          retention-days: 7
       - name: Verify demo candidates
         run: npm run demo:verify
       - name: Type-check candidate A
