@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 const scenarios = [
   ["FR-01", "Add SMS Notifications", "medium", "breadth"],
@@ -97,7 +97,7 @@ const scenarioDetail = {
   rawRuns: { A: [rawA], B: [rawB] },
 };
 
-test("captures approved report and evidence drawer", async ({ page }, testInfo) => {
+async function mockAnalysisApi(page: Page): Promise<void> {
   await page.route("**/api/analyses/demo", async (route) => {
     await route.fulfill({ status: 202, contentType: "application/json", body: JSON.stringify({ analysisId: "visual-analysis" }) });
   });
@@ -111,13 +111,35 @@ test("captures approved report and evidence drawer", async ({ page }, testInfo) 
   await page.route("**/api/analyses/visual-analysis", async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ status: "completed", analysisId: "visual-analysis", report }) });
   });
+}
 
+async function openReport(page: Page): Promise<void> {
   await page.goto("/");
   await page.getByRole("button", { name: /start analysis/i }).click();
   await expect(page.getByRole("heading", { name: "Analysis Report" })).toBeVisible();
+}
+
+test("captures approved report and evidence drawer", async ({ page }, testInfo) => {
+  await mockAnalysisApi(page);
+  await openReport(page);
   await page.screenshot({ path: testInfo.outputPath("futureproof-report.png"), fullPage: true });
 
   await page.getByRole("button", { name: /view details for provider fallback/i }).click();
   await expect(page.getByRole("dialog", { name: /scenario detail/i })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("futureproof-drawer.png"), fullPage: true });
+});
+
+test("mobile report stays within the viewport and drawer remains usable", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockAnalysisApi(page);
+  await openReport(page);
+
+  const bodyOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
+  expect(bodyOverflow).toBe(false);
+  await page.screenshot({ path: testInfo.outputPath("futureproof-mobile-report.png"), fullPage: true });
+
+  await page.getByRole("button", { name: /view details for provider fallback/i }).click();
+  await expect(page.getByRole("dialog", { name: /scenario detail/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /close scenario detail/i })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("futureproof-mobile-drawer.png"), fullPage: true });
 });
