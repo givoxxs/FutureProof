@@ -5,13 +5,13 @@ import { ReportPage } from "./report-page";
 
 afterEach(cleanup);
 
-const scenarios = [
+const scenarios = ([
   ["FR-01", "Add SMS Notifications", "medium"],
   ["FR-02", "User Notification Preferences", "medium"],
   ["FR-03", "Retry Failed Delivery", "medium"],
   ["FR-04", "Provider Fallback (Email → SMS)", "hard"],
   ["FR-05", "Add Push Notifications", "easy"],
-].map(([id, title, difficulty]) => ({
+] as const).map(([id, title, difficulty]) => ({
   id,
   title,
   difficulty,
