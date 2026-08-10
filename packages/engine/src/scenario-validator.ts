@@ -9,12 +9,28 @@ const FORBIDDEN_PRESCRIPTIONS = [
   /\badd\s+(?:an?\s+)?class\b/i,
 ];
 
-function normalizeRequirement(requirement: string): string {
+export function normalizeRequirement(requirement: string): string {
   return requirement
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+export function validateScenarioCandidate(input: unknown): FutureScenario {
+  const parsed = FutureScenarioSchema.safeParse(input);
+  if (!parsed.success) throw new Error(`scenario has invalid shape: ${parsed.error}`);
+  const scenario = parsed.data;
+  if (scenario.externalDependencies) {
+    throw new Error(`scenario ${scenario.id} requires external dependencies`);
+  }
+  if (scenario.acceptance.length === 0) {
+    throw new Error(`scenario ${scenario.id} must include acceptance behavior`);
+  }
+  if (FORBIDDEN_PRESCRIPTIONS.some((pattern) => pattern.test(scenario.requirement))) {
+    throw new Error(`scenario ${scenario.id} contains an implementation prescription`);
+  }
+  return scenario;
 }
 
 export function validateScenarioSet(input: unknown): FutureScenario[] {
@@ -23,22 +39,15 @@ export function validateScenarioSet(input: unknown): FutureScenario[] {
   }
 
   const scenarios = input.map((item, index) => {
-    const parsed = FutureScenarioSchema.safeParse(item);
-    if (!parsed.success) throw new Error(`scenario ${index + 1} has invalid shape: ${parsed.error}`);
-    return parsed.data;
+    try {
+      return validateScenarioCandidate(item);
+    } catch (error) {
+      throw new Error(`scenario ${index + 1} invalid: ${error instanceof Error ? error.message : String(error)}`);
+    }
   });
 
   const normalized = new Set<string>();
   for (const scenario of scenarios) {
-    if (scenario.externalDependencies) {
-      throw new Error(`scenario ${scenario.id} requires external dependencies`);
-    }
-    if (scenario.acceptance.length === 0) {
-      throw new Error(`scenario ${scenario.id} must include acceptance behavior`);
-    }
-    if (FORBIDDEN_PRESCRIPTIONS.some((pattern) => pattern.test(scenario.requirement))) {
-      throw new Error(`scenario ${scenario.id} contains an implementation prescription`);
-    }
     const key = normalizeRequirement(scenario.requirement);
     if (normalized.has(key)) throw new Error(`duplicate normalized requirement: ${scenario.requirement}`);
     normalized.add(key);
