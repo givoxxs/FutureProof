@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { Sandbox } from "../../packages/engine/src/sandbox-manager.ts";
-import { probeRegression } from "../../packages/engine/src/regression-probe.ts";
+import { parseNodeTestCounts, probeRegression } from "../../packages/engine/src/regression-probe.ts";
 
 async function makeFourTestSandbox(): Promise<Sandbox> {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "futureproof-regression-"));
@@ -26,6 +26,15 @@ test("below four", () => assert.ok(value < 4));
 `, "utf8");
   return { root, candidateId: "A", scenarioId: "FR-01", trial: 1 };
 }
+
+test("parseNodeTestCounts accepts TAP summaries", () => {
+  assert.deepEqual(parseNodeTestCounts("# tests 22\n# pass 22\n# fail 0\n"), { passed: 22, failed: 0 });
+});
+
+test("parseNodeTestCounts accepts ANSI spec-reporter summaries used by local Node", () => {
+  const output = "\u001b[34mℹ tests 22\u001b[39m\n\u001b[34mℹ pass 20\u001b[39m\n\u001b[34mℹ fail 2\u001b[39m\n";
+  assert.deepEqual(parseNodeTestCounts(output), { passed: 20, failed: 2 });
+});
 
 test("probeRegression records failed pressure and recovery by edit cycle", async () => {
   const sandbox = await makeFourTestSandbox();
