@@ -7,9 +7,9 @@ import { analyzeRepo, UnsupportedRepositoryError } from "../../packages/engine/s
 
 const fixtureRoot = path.resolve("fixtures/notification-demo");
 
-test("summarizes the notification fixture without an LLM", async () => {
+test("summarizes the notification fixture as a pnpm workspace package without an LLM", async () => {
   const summary = await analyzeRepo(path.join(fixtureRoot, "candidate-a"));
-  assert.equal(summary.packageManager, "npm");
+  assert.equal(summary.packageManager, "pnpm");
   assert.equal(summary.language, "typescript");
   assert.match(summary.scripts.test ?? "", /node|test/);
   assert.ok(summary.sourceFiles.includes("src/notification-service.ts"));
@@ -18,10 +18,10 @@ test("summarizes the notification fixture without an LLM", async () => {
   assert.ok(summary.importEdges.some((edge) => edge.from === "src/notification-service.ts" && edge.to === "./email-sender.ts"));
 });
 
-test("summarizes base and candidate B as npm TypeScript repositories", async () => {
+test("summarizes base and candidate B as pnpm TypeScript workspace packages", async () => {
   for (const name of ["base", "candidate-b"]) {
     const summary = await analyzeRepo(path.join(fixtureRoot, name));
-    assert.equal(summary.packageManager, "npm");
+    assert.equal(summary.packageManager, "pnpm");
     assert.equal(summary.language, "typescript");
     assert.ok(summary.sourceFiles.length >= 1);
     assert.ok(summary.testFiles.length >= 1);
