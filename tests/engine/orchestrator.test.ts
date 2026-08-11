@@ -47,6 +47,7 @@ async function makeRequest(): Promise<AnalysisRequest> {
     runRoot: await fs.mkdtemp(path.join(os.tmpdir(), "futureproof-orchestrator-")),
     budget,
     trialsByScenario: { "FR-01": 1, "FR-02": 1, "FR-03": 1, "FR-04": 1, "FR-05": 1 },
+    concurrency: 1,
   };
 }
 
@@ -140,7 +141,7 @@ test("uses one shuffled scenario order fairly across both candidates and persist
 
 test("bounded concurrency two runs paired A/B work in parallel and returns logical pair order", async () => {
   const request = await makeRequest();
-  (request as AnalysisRequest & { concurrency: number }).concurrency = 2;
+  request.concurrency = 2;
   const { deps } = makeDeps();
   const starts: Array<{ candidateId: string; scenarioId: string; trial: number }> = [];
   let active = 0;
@@ -174,7 +175,7 @@ test("bounded concurrency two runs paired A/B work in parallel and returns logic
 
 test("concurrency one preserves strictly sequential execution", async () => {
   const request = await makeRequest();
-  (request as AnalysisRequest & { concurrency: number }).concurrency = 1;
+  request.concurrency = 1;
   const { deps } = makeDeps();
   let active = 0;
   let maxActive = 0;
