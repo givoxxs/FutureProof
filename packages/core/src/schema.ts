@@ -19,7 +19,7 @@ export interface AcceptanceCase {
 export interface FutureScenario {
   id: string;
   title: string;
-  dimension: "breadth" | "policy" | "reliability" | "composition" | "extension";
+  dimension: "breadth" | "policy" | "reliability" | "composition" | "extension" | "correctness" | "temporal";
   requirement: string;
   rationale: string;
   affectedCapability: string;
@@ -201,7 +201,7 @@ export const FutureScenarioSchema: RuntimeSchema<FutureScenario> = {
   safeParse(input) {
     if (!isRecord(input)) return fail("scenario must be an object");
     if (!isString(input.id) || !isString(input.title) || !isString(input.requirement)) return fail("scenario identity is invalid");
-    if (!inSet(input.dimension, ["breadth", "policy", "reliability", "composition", "extension"] as const)) return fail("invalid dimension");
+    if (!inSet(input.dimension, ["breadth", "policy", "reliability", "composition", "extension", "correctness", "temporal"] as const)) return fail("invalid dimension");
     if (!isString(input.rationale) || !isString(input.affectedCapability)) return fail("scenario explanation is invalid");
     if (!inSet(input.difficulty, ["easy", "medium", "hard"] as const)) return fail("invalid difficulty");
     if (typeof input.externalDependencies !== "boolean") return fail("externalDependencies must be boolean");
