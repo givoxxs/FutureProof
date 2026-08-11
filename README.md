@@ -112,12 +112,14 @@ Create a local environment file:
 cp .env.example .env
 ```
 
-Then set your OpenRouter key:
+Then set your OpenRouter key and runtime options:
 
 ```env
 OPENROUTER_API_KEY=sk-or-v1-...
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 OPENROUTER_MODEL=deepseek/deepseek-v4-flash-0731
+OPENROUTER_REQUEST_TIMEOUT_MS=90000
+FUTUREPROOF_ANALYSIS_CONCURRENCY=2
 ```
 
 The default model is **DeepSeek V4 Flash 0731**. To use **GPT-5.6 Luna Pro**, change only one line:
@@ -125,6 +127,17 @@ The default model is **DeepSeek V4 Flash 0731**. To use **GPT-5.6 Luna Pro**, ch
 ```env
 OPENROUTER_MODEL=openai/gpt-5.6-luna-pro
 ```
+
+`OPENROUTER_REQUEST_TIMEOUT_MS` controls the per-request OpenRouter timeout independently from the coding-agent wall-clock budget.
+
+`FUTUREPROOF_ANALYSIS_CONCURRENCY` controls how many isolated `Candidate × Scenario × Trial` jobs may be active at once:
+
+- `1` — deterministic/debug mode, fully sequential.
+- `2` — **recommended default**; keeps Candidate A and B for the same scenario/trial paired when possible.
+- `3` — faster local/demo mode with one additional queued run allowed to overlap.
+- `4` — aggressive mode for machines/providers that tolerate more simultaneous work.
+
+Values outside `1..4` are rejected. FutureProof intentionally has no unlimited concurrency mode because provider throttling and local CPU/test contention would weaken the fairness of the benchmark.
 
 `OPENROUTER_BASE_URL` and `OPENROUTER_MODEL` have the documented defaults; `OPENROUTER_API_KEY` is required for a live run. `.env` and `.env.*` are ignored, while `.env.example` stays tracked.
 
@@ -220,6 +233,7 @@ The project contains automated checks for:
 - `.env`/generated-state ignore contracts and tracked `.env.example`
 - Makefile target contracts
 - OpenRouter default model/base URL and one-variable model switching
+- bounded analysis concurrency configuration (`1..4`, default `2`)
 - 22/22 current behavior in both candidates
 - scenario neutrality and frozen acceptance contracts
 - sandbox/path/command isolation
