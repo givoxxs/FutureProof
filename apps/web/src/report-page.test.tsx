@@ -6,16 +6,16 @@ import { ReportPage } from "./report-page";
 afterEach(cleanup);
 
 const scenarios = ([
-  ["FR-01", "Add SMS Notifications", "medium"],
-  ["FR-02", "User Notification Preferences", "medium"],
-  ["FR-03", "Retry Failed Delivery", "medium"],
-  ["FR-04", "Provider Fallback (Email → SMS)", "hard"],
-  ["FR-05", "Add Push Notifications", "easy"],
-] as const).map(([id, title, difficulty]) => ({
+  ["FR-01", "Add SMS shipment notifications", "medium", "breadth"],
+  ["FR-02", "Retry failed deliveries with exponential backoff", "medium", "reliability"],
+  ["FR-03", "Add per-user notification preferences", "medium", "policy"],
+  ["FR-04", "Make shipment delivery idempotent", "hard", "correctness"],
+  ["FR-05", "Respect notification quiet hours", "easy", "temporal"],
+] as const).map(([id, title, difficulty, dimension]) => ({
   id,
   title,
   difficulty,
-  dimension: "breadth",
+  dimension,
   requirement: title,
   rationale: "Plausible future evolution",
   affectedCapability: "notifications",
@@ -28,7 +28,7 @@ function aggregate(scenarioId: string, status: string, toolCalls: number, filesT
   return {
     scenarioId,
     status,
-    trialCount: 1,
+    trialCount: scenarioId === "FR-04" ? 3 : 1,
     metrics: {
       toolCalls,
       filesTouched,
@@ -75,11 +75,13 @@ const report = {
 };
 
 describe("ReportPage", () => {
-  it("renders current-test evidence, risks, six evidence metrics, and all five future scenarios", () => {
+  it("renders Candidate A/B identity, current-test evidence, risks, metrics, and all five scenarios", () => {
     render(<ReportPage report={report as any} onOpenScenario={vi.fn()} />);
 
-    expect(screen.getAllByText(/PR #42/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/PR #84/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Candidate A").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Candidate B").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/PR #42/)).toBeNull();
+    expect(screen.queryByText(/PR #84/)).toBeNull();
     expect(screen.getAllByText("22/22 tests")).toHaveLength(2);
     expect(screen.getByText("18")).toBeTruthy();
     expect(screen.getByText("74")).toBeTruthy();
@@ -100,7 +102,7 @@ describe("ReportPage", () => {
   it("uses real buttons for scenario detail interactions", () => {
     const onOpenScenario = vi.fn();
     render(<ReportPage report={report as any} onOpenScenario={onOpenScenario} />);
-    fireEvent.click(screen.getByRole("button", { name: /view details for provider fallback/i }));
+    fireEvent.click(screen.getByRole("button", { name: /view details for make shipment delivery idempotent/i }));
     expect(onOpenScenario).toHaveBeenCalledWith("FR-04", expect.anything());
   });
 
