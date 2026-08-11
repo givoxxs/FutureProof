@@ -36,6 +36,16 @@ export function resolveLiveLlmRequestTimeoutMs(env: Record<string, string | unde
   return timeoutMs;
 }
 
+export function resolveAnalysisConcurrency(env: Record<string, string | undefined>): number {
+  const raw = env.FUTUREPROOF_ANALYSIS_CONCURRENCY?.trim();
+  if (!raw) return 2;
+  const concurrency = Number(raw);
+  if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 4) {
+    throw new Error("FUTUREPROOF_ANALYSIS_CONCURRENCY must be an integer from 1 through 4");
+  }
+  return concurrency;
+}
+
 function createDefaultRunner(projectRoot: string): DemoAnalysisRunner {
   return async ({ analysisId, emit }): Promise<AnalysisReport> => {
     emit({ type: "analysis_started", analysisId });
