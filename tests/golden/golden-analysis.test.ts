@@ -56,6 +56,7 @@ async function request(runRoot: string): Promise<AnalysisRequest> {
     runRoot,
     budget,
     trialsByScenario: { "FR-01": 1, "FR-02": 1, "FR-03": 1, "FR-04": 3, "FR-05": 1 },
+    concurrency: 1,
   };
 }
 
