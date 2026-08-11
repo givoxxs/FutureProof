@@ -10,7 +10,7 @@ help:
 		'  make test          Run engine/core/API and React tests' \
 		'  make typecheck     Typecheck web and demo candidates' \
 		'  make build         Build web and verify demo candidates' \
-		'  make dev           Run API and web development servers' \
+		'  make dev           Run API first, wait until ready, then run the web dashboard' \
 		'  make dev-api       Run the Fastify API' \
 		'  make dev-web       Run the Vite dashboard' \
 		'  make visual-test   Run Playwright visual QA' \
@@ -42,11 +42,7 @@ dev-web:
 	$(PNPM) --dir apps/web dev
 
 dev:
-	@set -m; \
-	$(MAKE) dev-api & api_pid=$$!; \
-	$(MAKE) dev-web & web_pid=$$!; \
-	trap 'kill $$api_pid $$web_pid 2>/dev/null || true' INT TERM EXIT; \
-	wait $$api_pid $$web_pid
+	@node scripts/dev.mjs
 
 visual-test:
 	$(PNPM) --dir apps/web exec playwright install --with-deps chromium
