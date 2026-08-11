@@ -26,6 +26,16 @@ function requireOpenRouterApiKey(): string {
   return value;
 }
 
+export function resolveLiveLlmRequestTimeoutMs(env: Record<string, string | undefined>): number {
+  const raw = env.OPENROUTER_REQUEST_TIMEOUT_MS?.trim();
+  if (!raw) return 90_000;
+  const timeoutMs = Number(raw);
+  if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) {
+    throw new Error("OPENROUTER_REQUEST_TIMEOUT_MS must be a positive integer number of milliseconds");
+  }
+  return timeoutMs;
+}
+
 function createDefaultRunner(projectRoot: string): DemoAnalysisRunner {
   return async ({ analysisId, emit }): Promise<AnalysisReport> => {
     emit({ type: "analysis_started", analysisId });
@@ -37,6 +47,8 @@ function createDefaultRunner(projectRoot: string): DemoAnalysisRunner {
       baseUrl,
       apiKey: requireOpenRouterApiKey(),
       model: modelName,
+    }, {
+      timeoutMs: resolveLiveLlmRequestTimeoutMs(process.env),
     });
 
     const startedScenarios = new Set<string>();
