@@ -121,7 +121,7 @@ export function deriveExperimentState(events: ProgressEvent[]): ExperimentViewMo
     if (event.type === "scenario_completed") {
       scenario.status = "completed";
       if (activeScenarioId === scenario.id) {
-        activeScenarioId = DISPLAY_SCENARIOS.find((item) => scenarios[item.id].status === "running")?.id;
+        activeScenarioId = DISPLAY_SCENARIOS.find((item) => scenarios[item.id]?.status === "running")?.id;
       }
       continue;
     }
