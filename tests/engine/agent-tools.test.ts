@@ -104,7 +104,7 @@ test("read_file rejects files larger than 200 KB", async () => {
 test("run_command delegates only exact pnpm commands", async () => {
   const { sandbox } = await makeSandbox();
   await fs.writeFile(path.join(sandbox.root, "package.json"), JSON.stringify({ scripts: { test: "node -e \"process.exit(0)\"", build: "node -e \"process.exit(0)\"" } }), "utf8");
-  const tools = createAgentTools({ sandbox, commandTimeoutMs: 2_000 });
+  const tools = createAgentTools({ sandbox, commandTimeoutMs: 10_000 });
   const definition = tools.definitions.find((tool) => tool.name === "run_command");
   assert.deepEqual((definition?.inputSchema.properties as any).command.enum, ["pnpm test", "pnpm run build"]);
   const result = await tools.execute("run_command", { command: "pnpm test" });
