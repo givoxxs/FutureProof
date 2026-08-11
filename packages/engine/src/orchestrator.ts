@@ -32,6 +32,7 @@ export interface AnalysisRequest {
   runRoot: string;
   budget: AgentBudget;
   trialsByScenario: Record<string, number>;
+  concurrency: number;
 }
 
 export interface FinalCheckResult {
@@ -53,6 +54,7 @@ export interface OrchestratorProgressEvent {
   type: "candidate_started" | "candidate_completed";
   candidateId: CandidateId;
   scenarioId: string;
+  trial: number;
 }
 
 export interface OrchestratorDeps {
@@ -66,6 +68,13 @@ export interface OrchestratorDeps {
   runAgent?: RunAgent;
   finalCheck?: (sandbox: Sandbox, scenario: FutureScenario) => Promise<FinalCheckResult>;
   collectMetrics?: CollectMetrics;
+}
+
+interface RunJob {
+  logicalIndex: number;
+  candidateId: CandidateId;
+  scenario: FutureScenario;
+  trial: number;
 }
 
 const CANDIDATES: CandidateId[] = ["A", "B"];
@@ -277,8 +286,141 @@ async function persistInvalidRun(args: {
   return summary;
 }
 
+function validateConcurrency(value: number): number {
+  if (!Number.isInteger(value) || value < 1 || value > 4) {
+    throw new Error("analysis concurrency must be an integer from 1 through 4");
+  }
+  return value;
+}
+
+function buildRunJobs(request: AnalysisRequest, scenarioOrder: FutureScenario[]): RunJob[] {
+  const jobs: RunJob[] = [];
+  for (const scenario of scenarioOrder) {
+    const trials = request.trialsByScenario[scenario.id] ?? 1;
+    if (!Number.isInteger(trials) || trials < 1) throw new Error(`invalid trial count for ${scenario.id}`);
+    for (let trial = 1; trial <= trials; trial += 1) {
+      for (const candidateId of CANDIDATES) {
+        jobs.push({ logicalIndex: jobs.length, candidateId, scenario, trial });
+      }
+    }
+  }
+  return jobs;
+}
+
+async function executeRun(args: {
+  request: AnalysisRequest;
+  deps: OrchestratorDeps;
+  job: RunJob;
+  baseline: CandidateBaseline;
+  createSandbox: CreateSandbox;
+  validateBaseline: ValidateBaseline;
+  injectAcceptanceTest: InjectAcceptance;
+  runAgent: RunAgent;
+  finalCheck: (sandbox: Sandbox, scenario: FutureScenario) => Promise<FinalCheckResult>;
+  collectMetrics: CollectMetrics;
+}): Promise<{ logicalIndex: number; summary: ScenarioRunSummary }> {
+  const { request, deps, job, baseline } = args;
+  const { candidateId, scenario, trial, logicalIndex } = job;
+  deps.onProgress?.({ type: "candidate_started", candidateId, scenarioId: scenario.id, trial });
+
+  if (!baseline.valid) {
+    const summary = await persistInvalidRun({ request, candidateId, scenario, trial, baseline, modelName: deps.modelName });
+    deps.onProgress?.({ type: "candidate_completed", candidateId, scenarioId: scenario.id, trial });
+    return { logicalIndex, summary };
+  }
+
+  const sourceRoot = request.candidates[candidateId];
+  const sandbox = await args.createSandbox({
+    sourceRoot,
+    runRoot: sandboxRunRoot(request),
+    analysisId: request.analysisId,
+    candidateId,
+    scenarioId: scenario.id,
+    trial,
+  });
+  const artifactDir = artifactDirFor(request, candidateId, scenario.id, trial);
+  await fs.mkdir(artifactDir, { recursive: true });
+  const toolEventFile = path.join(artifactDir, "tool-events.jsonl");
+  await fs.writeFile(toolEventFile, "", "utf8");
+  const startedAtMs = Date.now();
+
+  try {
+    const runBaseline = await args.validateBaseline(sandbox);
+    if (!runBaseline.valid) {
+      const summary = await persistInvalidRun({ request, candidateId, scenario, trial, baseline: runBaseline, modelName: deps.modelName });
+      deps.onProgress?.({ type: "candidate_completed", candidateId, scenarioId: scenario.id, trial });
+      return { logicalIndex, summary };
+    }
+
+    const sourceAcceptance = path.join(request.acceptanceDir, `${scenario.id}.test.ts`);
+    await args.injectAcceptanceTest(sandbox.root, scenario.id, sourceAcceptance);
+    const events: AgentEvent[] = [];
+    const stop = await args.runAgent({
+      sandbox,
+      scenario,
+      budget: request.budget,
+      client: deps.client,
+      onEvent: async (event) => {
+        events.push(event);
+        await appendJsonl(toolEventFile, event);
+      },
+    });
+    const check = await args.finalCheck(sandbox, scenario);
+    const regressionSnapshots = await readRegressionSnapshots(sandbox);
+    const metrics = await args.collectMetrics({
+      sandbox,
+      baselineRoot: sourceRoot,
+      events,
+      regressionSnapshots,
+      wallTimeMs: Date.now() - startedAtMs,
+      tokenUsage: tokenUsage(events),
+    });
+    const patchPath = path.join(artifactDir, "patch.diff");
+    await fs.writeFile(patchPath, await buildPatchDiff(sourceRoot, sandbox.root), "utf8");
+    const warnings = await readSandboxWarnings(sandbox);
+    const status = mapStatus(check, stop.stopReason);
+    const summary: ScenarioRunSummary = {
+      analysisId: request.analysisId,
+      candidateId,
+      scenarioId: scenario.id,
+      trial,
+      status,
+      acceptancePassed: check.acceptancePassed,
+      acceptanceFailed: check.acceptanceFailed,
+      existingPassed: check.existingPassed,
+      existingFailed: check.existingFailed,
+      buildPassed: check.buildPassed,
+      metrics,
+      remainingFailures: check.remainingFailures,
+      patchPath,
+      artifactDir,
+    };
+    await writeJson(path.join(artifactDir, "metadata.json"), {
+      analysisId: request.analysisId,
+      candidateId,
+      scenarioId: scenario.id,
+      scenarioHash: sha256(JSON.stringify(scenario)),
+      trial,
+      modelName: deps.modelName,
+      budget: request.budget,
+      sourcePathHash: sha256(path.resolve(sourceRoot)),
+      basePathHash: sha256(path.resolve(request.baseRoot)),
+      warnings,
+      timestamps: { startedAtMs, finishedAtMs: Date.now() },
+    });
+    await writeJson(path.join(artifactDir, "test-results.json"), check);
+    await writeJson(path.join(artifactDir, "metrics.json"), metrics);
+    await writeJson(path.join(artifactDir, "summary.json"), summary);
+    deps.onProgress?.({ type: "candidate_completed", candidateId, scenarioId: scenario.id, trial });
+    return { logicalIndex, summary };
+  } finally {
+    await fs.rm(sandbox.root, { recursive: true, force: true });
+  }
+}
+
 export async function runAnalysis(request: AnalysisRequest, deps: OrchestratorDeps): Promise<AnalysisExecution> {
   const scenarios = validateScenarioSet(request.scenarios);
+  const concurrency = validateConcurrency(request.concurrency);
   const random = deps.random ?? Math.random;
   const scenarioOrder = shuffle(scenarios, random);
   const createSandbox = deps.createSandbox ?? createSandboxDefault;
@@ -288,7 +430,6 @@ export async function runAnalysis(request: AnalysisRequest, deps: OrchestratorDe
   const finalCheck = deps.finalCheck ?? defaultFinalCheck;
   const collectMetrics = deps.collectMetrics ?? collectRunMetricsDefault;
   const baselines = {} as Record<CandidateId, CandidateBaseline>;
-  const runs: ScenarioRunSummary[] = [];
 
   for (const candidateId of CANDIDATES) {
     const sandbox = await createSandbox({
@@ -306,107 +447,44 @@ export async function runAnalysis(request: AnalysisRequest, deps: OrchestratorDe
     }
   }
 
-  for (const candidateId of CANDIDATES) {
-    const candidateBaseline = baselines[candidateId];
-    for (const scenario of scenarioOrder) {
-      const trials = request.trialsByScenario[scenario.id] ?? 1;
-      if (!Number.isInteger(trials) || trials < 1) throw new Error(`invalid trial count for ${scenario.id}`);
-      deps.onProgress?.({ type: "candidate_started", candidateId, scenarioId: scenario.id });
-      for (let trial = 1; trial <= trials; trial += 1) {
-        if (!candidateBaseline.valid) {
-          runs.push(await persistInvalidRun({ request, candidateId, scenario, trial, baseline: candidateBaseline, modelName: deps.modelName }));
-          continue;
-        }
+  const jobs = buildRunJobs(request, scenarioOrder);
+  const completed = new Array<ScenarioRunSummary | undefined>(jobs.length);
+  let nextIndex = 0;
+  let failure: unknown;
 
-        const sourceRoot = request.candidates[candidateId];
-        const sandbox = await createSandbox({
-          sourceRoot,
-          runRoot: sandboxRunRoot(request),
-          analysisId: request.analysisId,
-          candidateId,
-          scenarioId: scenario.id,
-          trial,
+  const worker = async () => {
+    while (failure === undefined) {
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= jobs.length) return;
+      const job = jobs[index]!;
+      try {
+        const result = await executeRun({
+          request,
+          deps,
+          job,
+          baseline: baselines[job.candidateId],
+          createSandbox,
+          validateBaseline,
+          injectAcceptanceTest,
+          runAgent,
+          finalCheck,
+          collectMetrics,
         });
-        const artifactDir = artifactDirFor(request, candidateId, scenario.id, trial);
-        await fs.mkdir(artifactDir, { recursive: true });
-        const toolEventFile = path.join(artifactDir, "tool-events.jsonl");
-        await fs.writeFile(toolEventFile, "", "utf8");
-        const startedAtMs = Date.now();
-
-        try {
-          const runBaseline = await validateBaseline(sandbox);
-          if (!runBaseline.valid) {
-            runs.push(await persistInvalidRun({ request, candidateId, scenario, trial, baseline: runBaseline, modelName: deps.modelName }));
-            continue;
-          }
-
-          const sourceAcceptance = path.join(request.acceptanceDir, `${scenario.id}.test.ts`);
-          await injectAcceptanceTest(sandbox.root, scenario.id, sourceAcceptance);
-          const events: AgentEvent[] = [];
-          const stop = await runAgent({
-            sandbox,
-            scenario,
-            budget: request.budget,
-            client: deps.client,
-            onEvent: async (event) => {
-              events.push(event);
-              await appendJsonl(toolEventFile, event);
-            },
-          });
-          const check = await finalCheck(sandbox, scenario);
-          const regressionSnapshots = await readRegressionSnapshots(sandbox);
-          const metrics = await collectMetrics({
-            sandbox,
-            baselineRoot: sourceRoot,
-            events,
-            regressionSnapshots,
-            wallTimeMs: Date.now() - startedAtMs,
-            tokenUsage: tokenUsage(events),
-          });
-          const patchPath = path.join(artifactDir, "patch.diff");
-          await fs.writeFile(patchPath, await buildPatchDiff(sourceRoot, sandbox.root), "utf8");
-          const warnings = await readSandboxWarnings(sandbox);
-          const status = mapStatus(check, stop.stopReason);
-          const summary: ScenarioRunSummary = {
-            analysisId: request.analysisId,
-            candidateId,
-            scenarioId: scenario.id,
-            trial,
-            status,
-            acceptancePassed: check.acceptancePassed,
-            acceptanceFailed: check.acceptanceFailed,
-            existingPassed: check.existingPassed,
-            existingFailed: check.existingFailed,
-            buildPassed: check.buildPassed,
-            metrics,
-            remainingFailures: check.remainingFailures,
-            patchPath,
-            artifactDir,
-          };
-          await writeJson(path.join(artifactDir, "metadata.json"), {
-            analysisId: request.analysisId,
-            candidateId,
-            scenarioId: scenario.id,
-            scenarioHash: sha256(JSON.stringify(scenario)),
-            trial,
-            modelName: deps.modelName,
-            budget: request.budget,
-            sourcePathHash: sha256(path.resolve(sourceRoot)),
-            basePathHash: sha256(path.resolve(request.baseRoot)),
-            warnings,
-            timestamps: { startedAtMs, finishedAtMs: Date.now() },
-          });
-          await writeJson(path.join(artifactDir, "test-results.json"), check);
-          await writeJson(path.join(artifactDir, "metrics.json"), metrics);
-          await writeJson(path.join(artifactDir, "summary.json"), summary);
-          runs.push(summary);
-        } finally {
-          await fs.rm(sandbox.root, { recursive: true, force: true });
-        }
+        completed[result.logicalIndex] = result.summary;
+      } catch (error) {
+        if (failure === undefined) failure = error;
       }
-      deps.onProgress?.({ type: "candidate_completed", candidateId, scenarioId: scenario.id });
     }
-  }
+  };
 
+  const workerCount = Math.min(concurrency, jobs.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  if (failure !== undefined) throw failure;
+
+  const runs = completed.map((run, index) => {
+    if (!run) throw new Error(`missing run result at logical index ${index}`);
+    return run;
+  });
   return { baselines, runs };
 }
