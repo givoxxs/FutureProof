@@ -55,8 +55,8 @@ function CandidatePill({ label, subtitle, tests, tone }: { label: string; subtit
 
 function RiskCard({ score, candidate }: { score: number; candidate: "A" | "B" }) {
   const level = riskLevel(score);
-  return <section className={`risk-card risk-${level.toLowerCase()}`} aria-label={`Candidate ${candidate} Future Change Risk`}>
-    <div className="risk-card-label">Overall Future Risk</div>
+  return <section className={`risk-card candidate-risk-${candidate.toLowerCase()} risk-${level.toLowerCase()}`} aria-label={`Candidate ${candidate} Future Change Risk`}>
+    <div className="risk-card-label">Candidate {candidate} · Overall Future Risk</div>
     <div className="risk-score-row"><strong className="risk-score">{Math.round(score)}</strong><span>/100</span></div>
     <span className={`risk-badge ${level.toLowerCase()}`}>{level} RISK</span>
   </section>;
@@ -86,7 +86,7 @@ function Radar({ a, b }: { a: any; b: any }) {
       <polygon points={points(b)} className="radar-b" />
     </svg>
     <div className="radar-labels" aria-hidden="true"><span>Resilience</span><span>Effort</span><span>Regression Stability</span><span>Structural Stability</span></div>
-    <div className="legend"><span className="legend-a">PR #42</span><span className="legend-b">PR #84</span></div>
+    <div className="legend"><span className="legend-a">Candidate A</span><span className="legend-b">Candidate B</span></div>
   </section>;
 }
 
@@ -110,7 +110,7 @@ export function ReportPage({ report, onOpenScenario, onRerun }: ReportPageProps)
 
   return <div className="report-page">
     <header className="report-header">
-      <div><h1>Analysis Report</h1><p className="header-subtitle">owner/shipping-notify <span aria-hidden="true">·</span> Compare PR #42 vs PR #84 <span aria-hidden="true">·</span> 5 Future Scenarios</p></div>
+      <div><h1>Analysis Report</h1><p className="header-subtitle">Controlled A/B experiment <span aria-hidden="true">·</span> Candidate A vs Candidate B <span aria-hidden="true">·</span> 5 Future Scenarios</p></div>
       <div className="header-actions">
         <span className="completed-chip"><span aria-hidden="true">✓</span> Completed</span>
         <button className="secondary-button" type="button" onClick={() => void navigator.clipboard?.writeText(window.location.href)}>Share</button>
@@ -119,10 +119,10 @@ export function ReportPage({ report, onOpenScenario, onRerun }: ReportPageProps)
       </div>
     </header>
 
-    <section className="comparison-strip" aria-label="Candidate pull requests">
-      <div><CandidatePill label="PR #42" subtitle="A (Decoupled) · a1b2c3d" tests={testsA} tone="a" /></div>
+    <section className="comparison-strip" aria-label="Candidate implementations">
+      <div><CandidatePill label="Candidate A" subtitle="Decoupled implementation" tests={testsA} tone="a" /></div>
       <div className="versus">VS</div>
-      <div><CandidatePill label="PR #84" subtitle="B (Coupled) · d4e5f6g" tests={testsB} tone="b" /></div>
+      <div><CandidatePill label="Candidate B" subtitle="Coupled implementation" tests={testsB} tone="b" /></div>
     </section>
 
     <section className="risk-overview" aria-label="Future Change Risk overview">
@@ -150,7 +150,7 @@ export function ReportPage({ report, onOpenScenario, onRerun }: ReportPageProps)
       </div>
       <div className="scenario-table-wrap">
         <table className="scenario-table">
-          <thead><tr><th>Scenario</th><th>Difficulty</th><th>PR #42 (A)</th><th>PR #84 (B)</th><th /></tr></thead>
+          <thead><tr><th>Scenario</th><th>Difficulty</th><th>Candidate A</th><th>Candidate B</th><th /></tr></thead>
           <tbody>{report.scenarios.map((scenario: any, index: number) => {
             const resultA = a.aggregatedScenarios.find((item: any) => item.scenarioId === scenario.id);
             const resultB = b.aggregatedScenarios.find((item: any) => item.scenarioId === scenario.id);
