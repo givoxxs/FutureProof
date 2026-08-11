@@ -16,16 +16,17 @@ const events: ProgressEvent[] = [
 describe("deriveExperimentState", () => {
   it("keeps both candidates active and derives budget/timeline state from interleaved SSE", () => {
     const model = deriveExperimentState(events);
+    const fr03 = model.scenarios["FR-03"]!;
 
     expect(model.concurrency).toBe(2);
     expect(model.model).toBe("deepseek/deepseek-v4-flash-0731");
     expect(model.activeRuns).toBe(2);
-    expect(model.scenarios["FR-03"].candidates.A.status).toBe("running");
-    expect(model.scenarios["FR-03"].candidates.B.status).toBe("running");
-    expect(model.scenarios["FR-03"].candidates.A.toolCalls).toBe(14);
-    expect(model.scenarios["FR-03"].candidates.B.testCycles).toBe(3);
-    expect(model.scenarios["FR-03"].candidates.B.timeline.at(-1)?.action).toBe("repairing");
-    expect(model.scenarios["FR-03"].candidates.A.progress).toBeLessThan(100);
+    expect(fr03.candidates.A.status).toBe("running");
+    expect(fr03.candidates.B.status).toBe("running");
+    expect(fr03.candidates.A.toolCalls).toBe(14);
+    expect(fr03.candidates.B.testCycles).toBe(3);
+    expect(fr03.candidates.B.timeline.at(-1)?.action).toBe("repairing");
+    expect(fr03.candidates.A.progress).toBeLessThan(100);
   });
 
   it("marks a completed run at one hundred percent", () => {
@@ -34,9 +35,10 @@ describe("deriveExperimentState", () => {
       { type: "agent_activity", analysisId: "analysis-ui", scenarioId: "FR-03", candidateId: "A", trial: 1, timestampMs: 9, detail: { action: "done", toolCallsExecuted: 15, maxToolCalls: 35, testCycles: 2, maxTestCycles: 8, totalTokens: 10_000, maxTokens: 30_000 } },
       { type: "candidate_completed", analysisId: "analysis-ui", scenarioId: "FR-03", candidateId: "A", trial: 1, timestampMs: 10 },
     ]);
+    const fr03 = model.scenarios["FR-03"]!;
 
-    expect(model.scenarios["FR-03"].candidates.A.status).toBe("done");
-    expect(model.scenarios["FR-03"].candidates.A.progress).toBe(100);
+    expect(fr03.candidates.A.status).toBe("done");
+    expect(fr03.candidates.A.progress).toBe(100);
     expect(model.activeRuns).toBe(1);
   });
 });
