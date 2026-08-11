@@ -134,9 +134,21 @@ test("mobile report stays within the viewport and drawer remains usable", async 
   await mockAnalysisApi(page);
   await openReport(page);
 
-  const bodyOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
-  expect(bodyOverflow).toBe(false);
   await page.screenshot({ path: testInfo.outputPath("futureproof-mobile-report.png"), fullPage: true });
+  const overflowers = await page.evaluate(() => Array.from(document.querySelectorAll<HTMLElement>("body *"))
+    .map((element) => ({ element, rect: element.getBoundingClientRect() }))
+    .filter(({ rect }) => rect.right > window.innerWidth + 1 || rect.left < -1)
+    .slice(0, 20)
+    .map(({ element, rect }) => ({
+      tag: element.tagName,
+      className: typeof element.className === "string" ? element.className : "",
+      left: Math.round(rect.left),
+      right: Math.round(rect.right),
+      width: Math.round(rect.width),
+      text: (element.textContent ?? "").trim().replace(/\s+/g, " ").slice(0, 90),
+    })));
+  const bodyOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
+  expect(bodyOverflow, JSON.stringify(overflowers, null, 2)).toBe(false);
 
   await page.getByRole("button", { name: /view details for make shipment delivery idempotent/i }).click();
   await expect(page.getByRole("dialog", { name: /scenario detail/i })).toBeVisible();
