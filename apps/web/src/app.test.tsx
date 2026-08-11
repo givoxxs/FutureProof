@@ -21,10 +21,10 @@ afterEach(cleanup);
 
 const scenario = {
   id: "FR-01",
-  title: "Add SMS Notifications",
+  title: "Add SMS shipment notifications",
   difficulty: "medium",
   dimension: "breadth",
-  requirement: "Add SMS notifications",
+  requirement: "Support SMS shipment notifications as an alternative to email.",
   rationale: "Plausible future evolution",
   affectedCapability: "notifications",
   externalDependencies: false,
@@ -108,6 +108,30 @@ describe("App workspace navigation", () => {
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Stress-testing future changes" })).toBeTruthy());
     expect(screen.getByRole("button", { name: "Experiments" }).getAttribute("aria-current")).toBe("page");
+  });
+
+  it("renders two simultaneous candidate runs, runtime concurrency, and observed action timelines", async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /Start Analysis/i }));
+    await waitFor(() => expect(progressHandler).not.toBeNull());
+
+    act(() => {
+      progressHandler?.({ type: "analysis_started", analysisId: "analysis-ui", timestampMs: 1, detail: { concurrency: 2, model: "deepseek/deepseek-v4-flash-0731", provider: "OpenRouter", requestTimeoutMs: 90_000 } });
+      progressHandler?.({ type: "scenario_started", analysisId: "analysis-ui", scenarioId: "FR-03", timestampMs: 2 });
+      progressHandler?.({ type: "candidate_started", analysisId: "analysis-ui", scenarioId: "FR-03", candidateId: "A", trial: 1, timestampMs: 3 });
+      progressHandler?.({ type: "candidate_started", analysisId: "analysis-ui", scenarioId: "FR-03", candidateId: "B", trial: 1, timestampMs: 4 });
+      progressHandler?.({ type: "agent_activity", analysisId: "analysis-ui", scenarioId: "FR-03", candidateId: "A", trial: 1, timestampMs: 5, detail: { action: "reading", label: "src/notification-service.ts", toolCallsExecuted: 14, maxToolCalls: 35, testCycles: 2, maxTestCycles: 8 } });
+      progressHandler?.({ type: "agent_activity", analysisId: "analysis-ui", scenarioId: "FR-03", candidateId: "B", trial: 1, timestampMs: 6, detail: { action: "testing", label: "pnpm test", toolCallsExecuted: 11, maxToolCalls: 35, testCycles: 3, maxTestCycles: 8 } });
+    });
+
+    expect(screen.getByText("Concurrency 2")).toBeTruthy();
+    expect(screen.getByText("Active runs 2 / 2")).toBeTruthy();
+    expect(screen.getAllByText("Candidate A").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Candidate B").length).toBeGreaterThan(0);
+    expect(screen.getByText("Reading")).toBeTruthy();
+    expect(screen.getByText("Testing")).toBeTruthy();
+    expect(screen.getByText("Per-user notification preferences")).toBeTruthy();
+    expect(screen.queryByText(/sk-or-/i)).toBeNull();
   });
 
   it("switches to Reports on completion and preserves the report across manual navigation", async () => {
