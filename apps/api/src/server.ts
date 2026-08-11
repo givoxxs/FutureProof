@@ -75,6 +75,7 @@ function createDefaultRunner(projectRoot: string): DemoAnalysisRunner {
       runRoot: projectRoot,
       budget: { maxToolCalls: 35, maxTokens: 30_000, maxTestCycles: 8, timeoutMs: 180_000 },
       trialsByScenario: { "FR-01": 1, "FR-02": 1, "FR-03": 1, "FR-04": 3, "FR-05": 1 },
+      concurrency: resolveAnalysisConcurrency(process.env),
     }, {
       client,
       modelName,
