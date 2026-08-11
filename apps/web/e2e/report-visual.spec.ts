@@ -1,18 +1,18 @@
 import { expect, test, type Page } from "@playwright/test";
 
 const scenarios = [
-  ["FR-01", "Add SMS Notifications", "medium", "breadth"],
-  ["FR-02", "User Notification Preferences", "medium", "policy"],
-  ["FR-03", "Retry Failed Delivery", "medium", "reliability"],
-  ["FR-04", "Provider Fallback (Email → SMS)", "hard", "composition"],
-  ["FR-05", "Add Push Notifications", "easy", "extension"],
+  ["FR-01", "Add SMS shipment notifications", "medium", "breadth"],
+  ["FR-02", "Retry failed deliveries with exponential backoff", "medium", "reliability"],
+  ["FR-03", "Add per-user notification preferences", "medium", "policy"],
+  ["FR-04", "Make shipment delivery idempotent", "hard", "correctness"],
+  ["FR-05", "Respect notification quiet hours", "easy", "temporal"],
 ].map(([id, title, difficulty, dimension]) => ({
   id,
   title,
   difficulty,
   dimension,
   requirement: id === "FR-04"
-    ? "If the primary email provider fails, automatically fall back to the secondary provider."
+    ? "Prevent duplicate order-shipped notification delivery when the same idempotency key is processed more than once."
     : title,
   rationale: "Plausible future evolution generated from the base requirement.",
   affectedCapability: "shipment notifications",
@@ -65,7 +65,7 @@ const rawB = {
   analysisId: "visual-analysis", candidateId: "B", scenarioId: "FR-04", trial: 1, status: "FAIL",
   acceptancePassed: 1, acceptanceFailed: 1, existingPassed: 22, existingFailed: 0, buildPassed: true,
   metrics: { toolCalls: 35, readOps: 12, searchOps: 5, editOps: 7, testRuns: 8, tokenUsage: 26_300, wallTimeMs: 2500, filesTouched: 9, modulesTouched: 4, locAdded: 196, locDeleted: 41, publicApiFilesTouched: 1, regressionSnapshots: [{ cycle: 1, passed: 17, failed: 7, timestampMs: 1 }, { cycle: 2, passed: 22, failed: 2, timestampMs: 2 }], structuralDelta: { cyclomaticComplexity: 12, duplicateLineWindows: 1, dependencyFanOut: 1, fileSizeLines: 14 } },
-  remainingFailures: ["FR-04 uses secondary provider after primary failure"],
+  remainingFailures: ["FR-04 duplicate shipment delivery remains possible"],
 };
 
 const report = {
@@ -124,7 +124,7 @@ test("captures approved report and evidence drawer", async ({ page }, testInfo) 
   await openReport(page);
   await page.screenshot({ path: testInfo.outputPath("futureproof-report.png"), fullPage: true });
 
-  await page.getByRole("button", { name: /view details for provider fallback/i }).click();
+  await page.getByRole("button", { name: /view details for make shipment delivery idempotent/i }).click();
   await expect(page.getByRole("dialog", { name: /scenario detail/i })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("futureproof-drawer.png"), fullPage: true });
 });
@@ -138,7 +138,7 @@ test("mobile report stays within the viewport and drawer remains usable", async 
   expect(bodyOverflow).toBe(false);
   await page.screenshot({ path: testInfo.outputPath("futureproof-mobile-report.png"), fullPage: true });
 
-  await page.getByRole("button", { name: /view details for provider fallback/i }).click();
+  await page.getByRole("button", { name: /view details for make shipment delivery idempotent/i }).click();
   await expect(page.getByRole("dialog", { name: /scenario detail/i })).toBeVisible();
   await expect(page.getByRole("button", { name: /close scenario detail/i })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("futureproof-mobile-drawer.png"), fullPage: true });
