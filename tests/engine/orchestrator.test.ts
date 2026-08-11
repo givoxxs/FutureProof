@@ -55,7 +55,7 @@ function makeDeps(options: { invalidB?: boolean } = {}) {
   const sandboxRoots: string[] = [];
   const agentCalls: Array<{ candidateId: string; scenarioId: string; budget: AgentBudget; client: ToolCallingLlmClient }> = [];
   const injections: Array<{ candidateId: string; scenarioId: string; bytes: string }> = [];
-  const progressEvents: Array<{ type: string; candidateId: string; scenarioId: string }> = [];
+  const progressEvents: Array<{ type: string; candidateId?: string; scenarioId: string }> = [];
   let sandboxSeq = 0;
   const randomValues = [0.91, 0.17, 0.73, 0.31, 0.55];
   let randomIndex = 0;
@@ -110,7 +110,8 @@ test("uses one shuffled scenario order fairly across both candidates and persist
   assert.ok(agentCalls.every((call) => call.client === fakeClient));
   assert.ok(agentCalls.every((call) => JSON.stringify(call.budget) === JSON.stringify(budget)));
   assert.equal(new Set(sandboxRoots).size, sandboxRoots.length);
-  assert.equal(progressEvents.length, 20);
+  assert.equal(progressEvents.filter((event) => event.type === "candidate_started").length, 10);
+  assert.equal(progressEvents.filter((event) => event.type === "candidate_completed").length, 10);
   for (const candidateId of ["A", "B"] as const) {
     for (const scenarioId of orderA) {
       assert.ok(progressEvents.some((event) => event.type === "candidate_started" && event.candidateId === candidateId && event.scenarioId === scenarioId));
