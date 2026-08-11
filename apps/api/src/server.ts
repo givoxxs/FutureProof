@@ -48,21 +48,26 @@ export function resolveAnalysisConcurrency(env: Record<string, string | undefine
 
 function createDefaultRunner(projectRoot: string): DemoAnalysisRunner {
   return async ({ analysisId, emit }): Promise<AnalysisReport> => {
-    emit({ type: "analysis_started", analysisId });
     const fixtureRoot = path.join(projectRoot, "fixtures", "notification-demo");
-    const scenarios = await loadFrozenScenarios(path.join(fixtureRoot, "scenarios.json"));
     const modelName = process.env.OPENROUTER_MODEL?.trim() || OPENROUTER_DEFAULT_MODEL;
     const baseUrl = (process.env.OPENROUTER_BASE_URL?.trim() || OPENROUTER_DEFAULT_BASE_URL).replace(/\/+$/, "");
+    const requestTimeoutMs = resolveLiveLlmRequestTimeoutMs(process.env);
+    const concurrency = resolveAnalysisConcurrency(process.env);
+    emit({
+      type: "analysis_started",
+      analysisId,
+      detail: { model: modelName, concurrency, requestTimeoutMs, provider: "OpenRouter" },
+    });
+
+    const scenarios = await loadFrozenScenarios(path.join(fixtureRoot, "scenarios.json"));
     const client = new OpenAiCompatibleClient({
       baseUrl,
       apiKey: requireOpenRouterApiKey(),
       model: modelName,
     }, {
-      timeoutMs: resolveLiveLlmRequestTimeoutMs(process.env),
+      timeoutMs: requestTimeoutMs,
     });
 
-    const startedScenarios = new Set<string>();
-    const completedCandidates = new Map<string, Set<string>>();
     const execution = await runAnalysis({
       analysisId,
       baseRoot: path.join(fixtureRoot, "base"),
@@ -75,22 +80,19 @@ function createDefaultRunner(projectRoot: string): DemoAnalysisRunner {
       runRoot: projectRoot,
       budget: { maxToolCalls: 35, maxTokens: 30_000, maxTestCycles: 8, timeoutMs: 180_000 },
       trialsByScenario: { "FR-01": 1, "FR-02": 1, "FR-03": 1, "FR-04": 3, "FR-05": 1 },
-      concurrency: resolveAnalysisConcurrency(process.env),
+      concurrency,
     }, {
       client,
       modelName,
       onProgress(event) {
-        if (!startedScenarios.has(event.scenarioId)) {
-          startedScenarios.add(event.scenarioId);
-          emit({ type: "scenario_started", analysisId, scenarioId: event.scenarioId });
-        }
-        emit({ type: event.type, analysisId, scenarioId: event.scenarioId, candidateId: event.candidateId });
-        if (event.type === "candidate_completed") {
-          const completed = completedCandidates.get(event.scenarioId) ?? new Set<string>();
-          completed.add(event.candidateId);
-          completedCandidates.set(event.scenarioId, completed);
-          if (completed.size === 2) emit({ type: "scenario_completed", analysisId, scenarioId: event.scenarioId });
-        }
+        emit({
+          type: event.type,
+          analysisId,
+          scenarioId: event.scenarioId,
+          candidateId: event.candidateId,
+          trial: event.trial,
+          detail: event.detail,
+        });
       },
     });
     const report = buildAnalysisReport(analysisId, scenarios, execution);
