@@ -1,0 +1,9 @@
+packages:
+  - apps/*
+  - packages/*
+  - fixtures/notification-demo/base
+  - fixtures/notification-demo/candidate-a
+  - fixtures/notification-demo/candidate-b
+
+allowBuilds:
+  esbuild: true

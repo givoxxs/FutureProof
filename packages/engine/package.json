@@ -1,0 +1,13 @@
+{
+  "name": "@futureproof/engine",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/orchestrator.ts",
+    "./repo-analyzer": "./src/repo-analyzer.ts"
+  },
+  "dependencies": {
+    "@futureproof/core": "workspace:*",
+    "typescript": "^5.0.0"
+  }
+}

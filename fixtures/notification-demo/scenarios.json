@@ -1,0 +1,142 @@
+[
+  {
+    "id": "FR-01",
+    "title": "Add SMS shipment notifications",
+    "dimension": "breadth",
+    "requirement": "Support SMS shipment notifications as an alternative to email.",
+    "rationale": "Shipment notifications already exist through email, so a second delivery channel is a plausible adjacent capability.",
+    "affectedCapability": "shipment notification delivery",
+    "difficulty": "medium",
+    "externalDependencies": false,
+    "provenance": [
+      "current-requirement.md: shipment notifications are delivered to customers",
+      "base/src/index.ts: the current notification path has one email delivery channel"
+    ],
+    "acceptance": [
+      {
+        "name": "sends sms when selected",
+        "given": "a shipped order and an SMS-capable notification dependency",
+        "when": "shipment notification is requested through SMS",
+        "then": "one SMS is sent and no email is sent"
+      },
+      {
+        "name": "preserves default email",
+        "given": "a shipped order with no channel override",
+        "when": "shipment notification is sent",
+        "then": "email remains the default delivery channel"
+      }
+    ]
+  },
+  {
+    "id": "FR-02",
+    "title": "Retry failed deliveries with exponential backoff",
+    "dimension": "reliability",
+    "requirement": "Retry transient shipment-notification delivery failures with a bounded exponential backoff policy.",
+    "rationale": "The current requirement includes provider failure behavior, so bounded retries with increasing delays are a plausible reliability evolution.",
+    "affectedCapability": "notification delivery reliability",
+    "difficulty": "medium",
+    "externalDependencies": false,
+    "provenance": [
+      "current-requirement.md: provider failures are part of the current behavior",
+      "base/src/index.ts: delivery currently performs a single provider attempt"
+    ],
+    "acceptance": [
+      {
+        "name": "retries transient failures until success",
+        "given": "an email provider that fails twice then succeeds",
+        "when": "three attempts with a base retry delay are allowed",
+        "then": "delivery succeeds on the third provider call after two increasing delays"
+      },
+      {
+        "name": "stops after the configured bound",
+        "given": "an email provider that keeps failing",
+        "when": "three attempts are allowed",
+        "then": "the operation fails after exactly three provider calls"
+      }
+    ]
+  },
+  {
+    "id": "FR-03",
+    "title": "Add per-user notification preferences",
+    "dimension": "policy",
+    "requirement": "Respect a user's choice to disable shipment email notifications.",
+    "rationale": "Once shipment notifications exist, users commonly need a policy controlling whether a channel is enabled.",
+    "affectedCapability": "shipment notification policy",
+    "difficulty": "medium",
+    "externalDependencies": false,
+    "provenance": [
+      "current-requirement.md: customer shipment notifications are user-facing",
+      "base/src/index.ts: shipment email is currently unconditional"
+    ],
+    "acceptance": [
+      {
+        "name": "honors disabled email preference",
+        "given": "a user who disabled shipment email",
+        "when": "the order ships",
+        "then": "no shipment email is sent"
+      },
+      {
+        "name": "keeps email enabled by default",
+        "given": "a user with no explicit preference",
+        "when": "the order ships",
+        "then": "the existing email notification is sent"
+      }
+    ]
+  },
+  {
+    "id": "FR-04",
+    "title": "Make shipment delivery idempotent",
+    "dimension": "correctness",
+    "requirement": "Prevent duplicate order-shipped notification delivery when the same idempotency key is processed more than once.",
+    "rationale": "Shipment events can be retried or delivered more than once, so duplicate suppression is a plausible stateful correctness requirement.",
+    "affectedCapability": "shipment notification correctness",
+    "difficulty": "hard",
+    "externalDependencies": false,
+    "provenance": [
+      "current-requirement.md: one shipment event produces one customer notification and one tracking record",
+      "base/src/index.ts: current delivery has no duplicate-event protection"
+    ],
+    "acceptance": [
+      {
+        "name": "suppresses duplicate delivery for the same key",
+        "given": "the same shipped order and idempotency key are processed twice",
+        "when": "shipment notification runs twice",
+        "then": "only one customer email is delivered"
+      },
+      {
+        "name": "allows distinct idempotency keys",
+        "given": "two otherwise identical shipment requests with different idempotency keys",
+        "when": "both are processed",
+        "then": "both notification requests may deliver"
+      }
+    ]
+  },
+  {
+    "id": "FR-05",
+    "title": "Respect notification quiet hours",
+    "dimension": "temporal",
+    "requirement": "Respect configured quiet hours by deferring immediate shipment-email delivery during the quiet window while preserving normal delivery outside it.",
+    "rationale": "A time-based delivery policy is a plausible workflow evolution once customer notifications exist.",
+    "affectedCapability": "shipment notification timing",
+    "difficulty": "easy",
+    "externalDependencies": false,
+    "provenance": [
+      "current-requirement.md: shipment notifications are user-facing and currently sent immediately",
+      "base/src/index.ts: the current notification path has no delivery-window policy"
+    ],
+    "acceptance": [
+      {
+        "name": "does not deliver immediately during quiet hours",
+        "given": "quiet hours from 22:00 through 07:00 and a current hour inside that window",
+        "when": "shipment notification is requested",
+        "then": "no immediate shipment email is sent"
+      },
+      {
+        "name": "delivers outside quiet hours",
+        "given": "the same quiet-hours policy and a current hour outside the window",
+        "when": "shipment notification is requested",
+        "then": "the existing shipment email is sent"
+      }
+    ]
+  }
+]
