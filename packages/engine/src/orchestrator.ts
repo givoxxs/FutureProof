@@ -14,6 +14,7 @@ import type {
 } from "@futureproof/core";
 import { appendJsonl, writeJson } from "@futureproof/core/artifacts";
 import { analysisArtifactDir } from "@futureproof/core/paths";
+import { activityFromAgentEvent, createAgentActivityState, terminalActivity, type AgentActivityDetail } from "./agent-activity.ts";
 import { injectAcceptanceTest as injectAcceptanceTestDefault } from "./acceptance-injector.ts";
 import { runCodingAgent, type AgentEvent, type AgentStopReason } from "./coding-agent.ts";
 import { runAllowedCommand } from "./command-runner.ts";
@@ -51,10 +52,11 @@ type RunAgent = typeof runCodingAgent;
 type CollectMetrics = typeof collectRunMetricsDefault;
 
 export interface OrchestratorProgressEvent {
-  type: "candidate_started" | "candidate_completed";
-  candidateId: CandidateId;
+  type: "scenario_started" | "candidate_started" | "agent_activity" | "candidate_completed" | "scenario_completed";
+  candidateId?: CandidateId;
   scenarioId: string;
-  trial: number;
+  trial?: number;
+  detail?: AgentActivityDetail;
 }
 
 export interface OrchestratorDeps {
@@ -321,10 +323,18 @@ async function executeRun(args: {
 }): Promise<{ logicalIndex: number; summary: ScenarioRunSummary }> {
   const { request, deps, job, baseline } = args;
   const { candidateId, scenario, trial, logicalIndex } = job;
+  const activityState = createAgentActivityState();
   deps.onProgress?.({ type: "candidate_started", candidateId, scenarioId: scenario.id, trial });
 
   if (!baseline.valid) {
     const summary = await persistInvalidRun({ request, candidateId, scenario, trial, baseline, modelName: deps.modelName });
+    deps.onProgress?.({
+      type: "agent_activity",
+      candidateId,
+      scenarioId: scenario.id,
+      trial,
+      detail: terminalActivity(activityState, request.budget, "failed", "invalid baseline"),
+    });
     deps.onProgress?.({ type: "candidate_completed", candidateId, scenarioId: scenario.id, trial });
     return { logicalIndex, summary };
   }
@@ -348,6 +358,13 @@ async function executeRun(args: {
     const runBaseline = await args.validateBaseline(sandbox);
     if (!runBaseline.valid) {
       const summary = await persistInvalidRun({ request, candidateId, scenario, trial, baseline: runBaseline, modelName: deps.modelName });
+      deps.onProgress?.({
+        type: "agent_activity",
+        candidateId,
+        scenarioId: scenario.id,
+        trial,
+        detail: terminalActivity(activityState, request.budget, "failed", "invalid run baseline"),
+      });
       deps.onProgress?.({ type: "candidate_completed", candidateId, scenarioId: scenario.id, trial });
       return { logicalIndex, summary };
     }
@@ -363,6 +380,10 @@ async function executeRun(args: {
       onEvent: async (event) => {
         events.push(event);
         await appendJsonl(toolEventFile, event);
+        const detail = activityFromAgentEvent(event, activityState, request.budget);
+        if (detail) {
+          deps.onProgress?.({ type: "agent_activity", candidateId, scenarioId: scenario.id, trial, detail });
+        }
       },
     });
     const check = await args.finalCheck(sandbox, scenario);
@@ -411,6 +432,14 @@ async function executeRun(args: {
     await writeJson(path.join(artifactDir, "test-results.json"), check);
     await writeJson(path.join(artifactDir, "metrics.json"), metrics);
     await writeJson(path.join(artifactDir, "summary.json"), summary);
+    const terminalAction = status === "SUCCESS" || status === "PARTIAL" ? "done" : "failed";
+    deps.onProgress?.({
+      type: "agent_activity",
+      candidateId,
+      scenarioId: scenario.id,
+      trial,
+      detail: terminalActivity(activityState, request.budget, terminalAction, status),
+    });
     deps.onProgress?.({ type: "candidate_completed", candidateId, scenarioId: scenario.id, trial });
     return { logicalIndex, summary };
   } finally {
@@ -449,6 +478,10 @@ export async function runAnalysis(request: AnalysisRequest, deps: OrchestratorDe
 
   const jobs = buildRunJobs(request, scenarioOrder);
   const completed = new Array<ScenarioRunSummary | undefined>(jobs.length);
+  const expectedByScenario = new Map<string, number>();
+  for (const job of jobs) expectedByScenario.set(job.scenario.id, (expectedByScenario.get(job.scenario.id) ?? 0) + 1);
+  const completedByScenario = new Map<string, number>();
+  const startedScenarios = new Set<string>();
   let nextIndex = 0;
   let failure: unknown;
 
@@ -458,6 +491,10 @@ export async function runAnalysis(request: AnalysisRequest, deps: OrchestratorDe
       nextIndex += 1;
       if (index >= jobs.length) return;
       const job = jobs[index]!;
+      if (!startedScenarios.has(job.scenario.id)) {
+        startedScenarios.add(job.scenario.id);
+        deps.onProgress?.({ type: "scenario_started", scenarioId: job.scenario.id });
+      }
       try {
         const result = await executeRun({
           request,
@@ -472,6 +509,11 @@ export async function runAnalysis(request: AnalysisRequest, deps: OrchestratorDe
           collectMetrics,
         });
         completed[result.logicalIndex] = result.summary;
+        const scenarioCompleted = (completedByScenario.get(job.scenario.id) ?? 0) + 1;
+        completedByScenario.set(job.scenario.id, scenarioCompleted);
+        if (scenarioCompleted === expectedByScenario.get(job.scenario.id)) {
+          deps.onProgress?.({ type: "scenario_completed", scenarioId: job.scenario.id });
+        }
       } catch (error) {
         if (failure === undefined) failure = error;
       }
