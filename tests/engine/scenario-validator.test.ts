@@ -6,7 +6,7 @@ function scenario(id: string, difficulty: "easy" | "medium" | "hard", requiremen
   return {
     id,
     title: requirement,
-    dimension: id === "FR-01" ? "breadth" : id === "FR-02" ? "policy" : id === "FR-03" ? "reliability" : id === "FR-04" ? "composition" : "extension",
+    dimension: id === "FR-01" ? "breadth" : id === "FR-02" ? "reliability" : id === "FR-03" ? "policy" : id === "FR-04" ? "correctness" : "temporal",
     requirement,
     rationale: "A plausible incremental evolution of shipment notifications.",
     affectedCapability: "shipment notifications",
@@ -20,10 +20,10 @@ function scenario(id: string, difficulty: "easy" | "medium" | "hard", requiremen
 function validSet() {
   return [
     scenario("FR-01", "medium", "Support SMS shipment notifications"),
-    scenario("FR-02", "medium", "Respect per-user notification preferences"),
-    scenario("FR-03", "medium", "Retry failed notification deliveries"),
-    scenario("FR-04", "hard", "Fall back to a secondary email provider"),
-    scenario("FR-05", "easy", "Support push shipment notifications"),
+    scenario("FR-02", "medium", "Retry transient delivery failures with exponential backoff"),
+    scenario("FR-03", "medium", "Respect per-user notification preferences"),
+    scenario("FR-04", "hard", "Prevent duplicate delivery for the same idempotency key"),
+    scenario("FR-05", "easy", "Respect configured notification quiet hours"),
   ];
 }
 
@@ -58,6 +58,6 @@ test("rejects external dependencies and empty acceptance contracts", () => {
 
 test("rejects an unbalanced demo difficulty profile", () => {
   const input = validSet();
-  input[4] = scenario("FR-05", "medium", "Support push shipment notifications");
+  input[4] = scenario("FR-05", "medium", "Respect configured notification quiet hours");
   assert.throws(() => validateScenarioSet(input), /difficulty profile/i);
 });
