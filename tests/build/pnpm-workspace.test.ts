@@ -102,3 +102,14 @@ test("Makefile exposes the supported pnpm developer workflow", async () => {
   assert.doesNotMatch(makefile, /\bnpm\b|\bnpx\b/);
   assert.match(makefile, /pnpm/);
 });
+
+test("make dev delegates lifecycle and readiness to the dev supervisor", async () => {
+  const makefile = await readFile(path.join(root, "Makefile"), "utf8");
+  assert.match(makefile, /^dev:\n\t@node scripts\/dev\.mjs$/m);
+
+  const supervisor = await readFile(path.join(root, "scripts", "dev.mjs"), "utf8");
+  assert.match(supervisor, /apps\/api/);
+  assert.match(supervisor, /\/api\/health/);
+  assert.match(supervisor, /apps\/web/);
+  assert.match(supervisor, /process\.kill\(-child\.pid/);
+});
