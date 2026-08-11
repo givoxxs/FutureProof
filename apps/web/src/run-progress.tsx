@@ -1,57 +1,90 @@
-import React from "react";
-import type { ProgressEvent } from "./api";
+import React, { useMemo } from "react";
+import type { CandidateId, ProgressEvent } from "./api";
+import { deriveExperimentState, DISPLAY_SCENARIOS, type CandidateExperimentState } from "./experiment-state";
 
-const SCENARIOS = [
-  { id: "FR-01", title: "Add SMS notifications", difficulty: "Medium" },
-  { id: "FR-02", title: "User notification preferences", difficulty: "Medium" },
-  { id: "FR-03", title: "Retry failed delivery", difficulty: "Medium" },
-  { id: "FR-04", title: "Provider fallback", difficulty: "Hard · 3 trials" },
-  { id: "FR-05", title: "Add push notifications", difficulty: "Easy" },
-];
-
-function stateFor(events: ProgressEvent[], scenarioId: string, candidateId: "A" | "B") {
-  if (events.some((event) => event.type === "candidate_completed" && event.scenarioId === scenarioId && event.candidateId === candidateId)) return "done";
-  if (events.some((event) => event.type === "candidate_started" && event.scenarioId === scenarioId && event.candidateId === candidateId)) return "running";
-  return "pending";
+function titleCase(value: string): string {
+  return value.length > 0 ? `${value[0]!.toUpperCase()}${value.slice(1)}` : value;
 }
 
-function RunState({ state }: { state: "pending" | "running" | "done" }) {
-  if (state === "done") return <span className="run-state done"><span aria-hidden="true">✓</span> Complete</span>;
-  if (state === "running") return <span className="run-state running"><span className="mini-spinner" aria-hidden="true" /> Running</span>;
-  return <span className="run-state pending">Queued</span>;
+function formatTime(timestampMs: number): string {
+  return new Date(timestampMs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+}
+
+function StatusBadge({ status }: { status: CandidateExperimentState["status"] }) {
+  return <span className={`run-status run-status-${status}`}><span aria-hidden="true" />{titleCase(status)}</span>;
+}
+
+function CandidatePanel({ candidateId, state }: { candidateId: CandidateId; state: CandidateExperimentState }) {
+  return <article className={`experiment-candidate experiment-candidate-${candidateId.toLowerCase()}`}>
+    <header className="experiment-candidate-header">
+      <div className="candidate-title-row"><span className={`candidate-avatar candidate-avatar-${candidateId.toLowerCase()}`}>{candidateId}</span><div><strong>Candidate {candidateId}</strong><small>Trial {state.trial}</small></div></div>
+      <StatusBadge status={state.status} />
+    </header>
+
+    <div className="experiment-metrics">
+      <div><span>Tool calls</span><strong>{state.toolCalls}<em> / {state.maxToolCalls}</em></strong></div>
+      <div><span>Test cycles</span><strong>{state.testCycles}<em> / {state.maxTestCycles}</em></strong></div>
+      <div><span>Tokens</span><strong>{state.totalTokens.toLocaleString()}<em> / {state.maxTokens.toLocaleString()}</em></strong></div>
+    </div>
+
+    <div className="budget-progress" aria-label={`Candidate ${candidateId} budget progress ${state.progress}%`}>
+      <div className="budget-progress-label"><span>Budget-derived progress</span><strong>{state.progress}%</strong></div>
+      <div className="budget-progress-track"><span style={{ width: `${state.progress}%` }} /></div>
+    </div>
+
+    <div className="agent-timeline">
+      <div className="timeline-heading"><span>Observed agent activity</span><small>latest events</small></div>
+      {state.timeline.length === 0 ? <div className="timeline-empty">Waiting for the first model/tool event…</div> : state.timeline.map((entry, index) => <div className="timeline-row" key={`${entry.timestampMs}-${index}`}>
+        <time>{formatTime(entry.timestampMs)}</time>
+        <span className={`timeline-action timeline-${entry.action}`}><i aria-hidden="true" />{titleCase(entry.action)}</span>
+        <code title={entry.label}>{entry.label ?? "—"}</code>
+      </div>)}
+    </div>
+  </article>;
 }
 
 export function RunProgress({ analysisId, events }: { analysisId: string; events: ProgressEvent[] }) {
-  const completedScenarios = new Set(events.filter((event) => event.type === "scenario_completed").map((event) => event.scenarioId)).size;
-  return <div className="run-progress-page">
-    <header className="run-progress-header">
-      <div><p className="eyebrow">Analysis {analysisId.slice(0, 8)}</p><h1>Stress-testing future changes</h1><p>FutureProof is applying the same frozen requirements to both candidate implementations under the same execution budget.</p></div>
-      <div className="progress-ring" aria-label={`${completedScenarios} of ${SCENARIOS.length} scenarios complete`}><strong>{completedScenarios}</strong><span>/ {SCENARIOS.length}</span></div>
+  const model = useMemo(() => deriveExperimentState(events), [events]);
+  const activeScenario = model.scenarios[model.activeScenarioId ?? ""]
+    ?? DISPLAY_SCENARIOS.map((scenario) => model.scenarios[scenario.id]).find((scenario) => scenario?.status === "running")
+    ?? model.scenarios["FR-01"]!;
+
+  return <section className="experiment-page">
+    <header className="workspace-page-header experiment-page-header">
+      <div><p className="eyebrow">Live controlled experiment</p><h1>Stress-testing future changes</h1><p>Independent sandboxes run the same frozen requirement against both candidates. Progress reflects observed budget usage, not predicted model completion.</p></div>
+      <div className="analysis-identity"><span>Analysis</span><code>{analysisId.slice(0, 8)}</code></div>
     </header>
 
-    <section className="control-proof">
-      <div><span>Scenario source</span><strong>Blind · base only</strong></div>
-      <div><span>Agent model</span><strong>Same model A/B</strong></div>
-      <div><span>Tool budget</span><strong>35 calls</strong></div>
-      <div><span>Token budget</span><strong>30k tokens</strong></div>
-      <div><span>Current tests</span><strong>22/22 both candidates</strong></div>
-    </section>
+    <div className="experiment-workbench">
+      <aside className="scenario-rail" aria-label="Scenario execution status">
+        <div className="scenario-rail-heading"><span>Scenarios</span><strong>{model.completedScenarios} / {DISPLAY_SCENARIOS.length}</strong></div>
+        {DISPLAY_SCENARIOS.map((definition) => {
+          const scenario = model.scenarios[definition.id]!;
+          const active = scenario.id === activeScenario.id;
+          return <div key={scenario.id} className={`scenario-rail-item ${active ? "active" : ""}`}>
+            <span className={`scenario-state-dot scenario-${scenario.status}`} aria-hidden="true" />
+            <div><code>{scenario.id}</code><strong>{scenario.shortTitle}</strong><small>{scenario.note}</small></div>
+            <span className="scenario-state-text">{titleCase(scenario.status)}</span>
+          </div>;
+        })}
+      </aside>
 
-    <section className="progress-table-card">
-      <div className="section-heading"><div><p className="eyebrow">Controlled execution</p><h2>Frozen future scenarios</h2></div><p>Candidate A and B are isolated; one run never inherits edits from another.</p></div>
-      <div className="scenario-table-wrap">
-        <table className="scenario-table progress-table">
-          <thead><tr><th>Scenario</th><th>Difficulty</th><th>Candidate A</th><th>Candidate B</th></tr></thead>
-          <tbody>{SCENARIOS.map((scenario) => <tr key={scenario.id}>
-            <td><strong>{scenario.title}</strong><span className="scenario-id">{scenario.id}</span></td>
-            <td><span className="difficulty">{scenario.difficulty}</span></td>
-            <td><RunState state={stateFor(events, scenario.id, "A")} /></td>
-            <td><RunState state={stateFor(events, scenario.id, "B")} /></td>
-          </tr>)}</tbody>
-        </table>
+      <div className="experiment-stage">
+        <header className="experiment-scenario-header">
+          <div><code>{activeScenario.id}</code><h2>{activeScenario.title}</h2></div>
+          <span className={`scenario-stage-status scenario-stage-${activeScenario.status}`}>{titleCase(activeScenario.status)}</span>
+        </header>
+        <div className="candidate-parallel-grid">
+          <CandidatePanel candidateId="A" state={activeScenario.candidates.A} />
+          <CandidatePanel candidateId="B" state={activeScenario.candidates.B} />
+        </div>
       </div>
-    </section>
+    </div>
 
-    <div className="run-footnote"><span className="live-dot" aria-hidden="true" /> Live experiment evidence is recorded to immutable run artifacts.</div>
-  </div>;
+    <footer className="experiment-runtime-footer">
+      <span><i className="runtime-dot" aria-hidden="true" />Concurrency {model.concurrency}</span>
+      <span>Active runs {model.activeRuns} / {model.concurrency}</span>
+      <span className="runtime-model">Model <code>{model.model}</code></span>
+    </footer>
+  </section>;
 }
