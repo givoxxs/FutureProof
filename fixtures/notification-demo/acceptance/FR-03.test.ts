@@ -2,32 +2,26 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { notifyShipment } from "../../src/index.ts";
 
-const order = { id: "future-retry", customer: { email: "student@example.com" } };
-
-function retryDeps(failuresBeforeSuccess: number) {
-  let attempts = 0;
+const order = { id: "future-preferences", customer: { email: "student@example.com" } };
+function deps() {
+  const messages: unknown[] = [];
   return {
-    get attempts() { return attempts; },
+    messages,
     value: {
-      email: {
-        async send() {
-          attempts += 1;
-          if (attempts <= failuresBeforeSuccess) throw new Error("transient smtp failure");
-        },
-      },
+      email: { async send(message: unknown) { messages.push(message); } },
       tracker: { async record() {} },
     },
   };
 }
 
-test("FR-03 retries transient failures until success", async () => {
-  const d = retryDeps(2);
-  await notifyShipment(order, d.value as any, { retry: { maxAttempts: 3 } } as any);
-  assert.equal(d.attempts, 3);
+test("FR-03 honors a disabled email preference", async () => {
+  const d = deps();
+  await notifyShipment(order, d.value as any, { preferences: { email: false } } as any);
+  assert.equal(d.messages.length, 0);
 });
 
-test("FR-03 stops after the configured attempt bound", async () => {
-  const d = retryDeps(99);
-  await assert.rejects(() => notifyShipment(order, d.value as any, { retry: { maxAttempts: 3 } } as any));
-  assert.equal(d.attempts, 3);
+test("FR-03 keeps email enabled by default", async () => {
+  const d = deps();
+  await notifyShipment(order, d.value as any);
+  assert.equal(d.messages.length, 1);
 });
