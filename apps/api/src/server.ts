@@ -92,6 +92,7 @@ export function buildServer(options: BuildServerOptions = {}) {
   const server = Fastify({ logger: false });
   const projectRoot = options.projectRoot ?? repositoryRoot();
   const bus = new ProgressBus();
+  server.get("/api/health", async () => ({ status: "ok" }));
   registerAnalysisRoutes(server, {
     projectRoot,
     bus,
