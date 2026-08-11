@@ -149,3 +149,10 @@ test("invalid candidate baseline emits INVALID runs and skips its agent executio
   assert.equal(invalidB.length, 5);
   assert.ok(invalidB.every((run) => run.status === "INVALID"));
 });
+
+test("final check uses only the pnpm command policy", async () => {
+  const source = await fs.readFile(path.resolve("packages/engine/src/orchestrator.ts"), "utf8");
+  assert.doesNotMatch(source, /"npm test"|"npm run build"/);
+  assert.match(source, /"pnpm test"/);
+  assert.match(source, /"pnpm run build"/);
+});
