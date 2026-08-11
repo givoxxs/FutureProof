@@ -1,4 +1,63 @@
+.candidate-a .candidate-dot,
+.legend-a::before {
+  background: var(--fp-indigo) !important;
+}
+
+.candidate-b .candidate-dot,
+.legend-b::before {
+  background: var(--fp-pink) !important;
+}
+
+.candidate-risk-a .risk-score {
+  color: var(--fp-indigo) !important;
+}
+
+.candidate-risk-b .risk-score {
+  color: var(--fp-pink) !important;
+}
+
+.radar-a {
+  fill: rgba(91, 92, 226, .12) !important;
+  stroke: var(--fp-indigo) !important;
+}
+
+.radar-b {
+  fill: rgba(232, 62, 140, .10) !important;
+  stroke: var(--fp-pink) !important;
+}
+
 @media (max-width: 760px) {
+  .app-shell .app-sidebar {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100vw;
+    height: auto;
+    display: flex !important;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .app-shell .app-sidebar nav {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 4px;
+    overflow: visible;
+  }
+
+  .app-shell .nav-item {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .app-shell .sidebar-runtime {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
   .report-page,
   .report-header,
   .comparison-strip,
