@@ -2,6 +2,7 @@ export type ProgressEventType =
   | "analysis_started"
   | "scenario_started"
   | "candidate_started"
+  | "agent_activity"
   | "candidate_completed"
   | "scenario_completed"
   | "analysis_completed"
@@ -12,6 +13,7 @@ export interface ProgressEvent {
   analysisId: string;
   scenarioId?: string;
   candidateId?: "A" | "B";
+  trial?: number;
   timestampMs?: number;
   detail?: Record<string, unknown>;
 }
