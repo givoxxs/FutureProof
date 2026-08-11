@@ -5,6 +5,7 @@ import "./styles.css";
 import "./fidelity.css";
 import "./responsive.css";
 import "./action-links.css";
+import "./hybrid.css";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("FutureProof root element is missing");
