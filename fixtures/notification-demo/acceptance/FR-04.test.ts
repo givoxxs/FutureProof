@@ -2,37 +2,36 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { notifyShipment } from "../../src/index.ts";
 
-const order = { id: "future-fallback", customer: { email: "student@example.com" } };
+const order = { id: "future-idempotent", customer: { email: "student@example.com" } };
 
-function deps(primaryFails: boolean) {
-  const primary: unknown[] = [];
-  const secondary: unknown[] = [];
+function deps() {
+  const emailMessages: unknown[] = [];
+  const trackingEvents: unknown[] = [];
   return {
-    primary,
-    secondary,
+    emailMessages,
+    trackingEvents,
     value: {
-      email: {
-        async send(message: unknown) {
-          primary.push(message);
-          if (primaryFails) throw new Error("primary down");
-        },
-      },
-      secondaryEmail: { async send(message: unknown) { secondary.push(message); } },
-      tracker: { async record() {} },
+      email: { async send(message: unknown) { emailMessages.push(message); } },
+      tracker: { async record(event: unknown) { trackingEvents.push(event); } },
     },
   };
 }
 
-test("FR-04 uses secondary provider after primary failure", async () => {
-  const d = deps(true);
-  await notifyShipment(order, d.value as any, { fallbackToSecondary: true } as any);
-  assert.equal(d.primary.length, 1);
-  assert.equal(d.secondary.length, 1);
+test("FR-04 suppresses duplicate delivery for the same idempotency key", async () => {
+  const d = deps();
+  const options = { idempotencyKey: "shipment:future-idempotent:v1" } as any;
+  await notifyShipment(order, d.value as any, options);
+  await notifyShipment(order, d.value as any, options);
+
+  assert.equal(d.emailMessages.length, 1);
+  assert.equal(d.trackingEvents.length, 1);
 });
 
-test("FR-04 does not call secondary after primary success", async () => {
-  const d = deps(false);
-  await notifyShipment(order, d.value as any, { fallbackToSecondary: true } as any);
-  assert.equal(d.primary.length, 1);
-  assert.equal(d.secondary.length, 0);
+test("FR-04 allows distinct idempotency keys to deliver independently", async () => {
+  const d = deps();
+  await notifyShipment(order, d.value as any, { idempotencyKey: "shipment:future-idempotent:first" } as any);
+  await notifyShipment(order, d.value as any, { idempotencyKey: "shipment:future-idempotent:second" } as any);
+
+  assert.equal(d.emailMessages.length, 2);
+  assert.equal(d.trackingEvents.length, 2);
 });
