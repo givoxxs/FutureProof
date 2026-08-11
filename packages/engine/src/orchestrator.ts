@@ -146,7 +146,7 @@ function mapStatus(check: FinalCheckResult, stopReason: AgentStopReason): Scenar
 }
 
 async function defaultFinalCheck(sandbox: Sandbox, scenario: FutureScenario): Promise<FinalCheckResult> {
-  const test = await runAllowedCommand(sandbox.root, "npm test", 30_000);
+  const test = await runAllowedCommand(sandbox.root, "pnpm test", 30_000);
   const output = `${test.stdout}\n${test.stderr}`;
   const totals = parseNodeTestCounts(output);
   if (!totals) throw new Error(`final test totals unavailable for ${scenario.id}`);
@@ -175,7 +175,7 @@ async function defaultFinalCheck(sandbox: Sandbox, scenario: FutureScenario): Pr
   const acceptancePassesCountedByRunner = Math.min(totals.passed, acceptancePassed);
   const existingFailed = Math.max(0, totals.failed - acceptanceFailuresCountedByRunner);
   const existingPassed = Math.max(0, totals.passed - acceptancePassesCountedByRunner);
-  const build = await runAllowedCommand(sandbox.root, "npm run build", 30_000);
+  const build = await runAllowedCommand(sandbox.root, "pnpm run build", 30_000);
 
   return {
     acceptancePassed,
