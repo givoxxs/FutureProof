@@ -67,6 +67,17 @@ async function waitForCompleted(server: ReturnType<typeof buildServer>, id: stri
   throw new Error("analysis did not complete within 2 seconds");
 }
 
+test("API exposes a readiness endpoint for the local dev supervisor", async () => {
+  const server = buildServer({ idFactory: () => "unused", runDemo: async () => report });
+  try {
+    const response = await server.inject({ method: "GET", url: "/api/health" });
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(response.json(), { status: "ok" });
+  } finally {
+    await server.close();
+  }
+});
+
 test("POST starts demo-owned analysis, GET exposes running then completed report", async () => {
   const gate = deferred<any>();
   const server = buildServer({
