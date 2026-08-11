@@ -138,6 +138,59 @@ test("uses one shuffled scenario order fairly across both candidates and persist
   }
 });
 
+test("bounded concurrency two runs paired A/B work in parallel and returns logical pair order", async () => {
+  const request = await makeRequest();
+  (request as AnalysisRequest & { concurrency: number }).concurrency = 2;
+  const { deps } = makeDeps();
+  const starts: Array<{ candidateId: string; scenarioId: string; trial: number }> = [];
+  let active = 0;
+  let maxActive = 0;
+
+  deps.runAgent = async (args) => {
+    active += 1;
+    maxActive = Math.max(maxActive, active);
+    starts.push({ candidateId: args.sandbox.candidateId, scenarioId: args.scenario.id, trial: args.sandbox.trial });
+    await new Promise((resolve) => setTimeout(resolve, args.sandbox.candidateId === "A" ? 25 : 5));
+    active -= 1;
+    return { stopReason: "completed" as const };
+  };
+
+  const execution = await runAnalysis(request, deps);
+
+  assert.equal(maxActive, 2);
+  assert.equal(starts[0]?.scenarioId, starts[1]?.scenarioId);
+  assert.equal(starts[0]?.trial, starts[1]?.trial);
+  assert.deepEqual(new Set(starts.slice(0, 2).map((item) => item.candidateId)), new Set(["A", "B"]));
+
+  for (let index = 0; index < execution.runs.length; index += 2) {
+    const runA = execution.runs[index]!;
+    const runB = execution.runs[index + 1]!;
+    assert.equal(runA.candidateId, "A");
+    assert.equal(runB.candidateId, "B");
+    assert.equal(runA.scenarioId, runB.scenarioId);
+    assert.equal(runA.trial, runB.trial);
+  }
+});
+
+test("concurrency one preserves strictly sequential execution", async () => {
+  const request = await makeRequest();
+  (request as AnalysisRequest & { concurrency: number }).concurrency = 1;
+  const { deps } = makeDeps();
+  let active = 0;
+  let maxActive = 0;
+
+  deps.runAgent = async () => {
+    active += 1;
+    maxActive = Math.max(maxActive, active);
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    active -= 1;
+    return { stopReason: "completed" as const };
+  };
+
+  await runAnalysis(request, deps);
+  assert.equal(maxActive, 1);
+});
+
 test("invalid candidate baseline emits INVALID runs and skips its agent executions", async () => {
   const request = await makeRequest();
   const { deps, agentCalls } = makeDeps({ invalidB: true });
