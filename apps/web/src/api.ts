@@ -1,12 +1,32 @@
 export type CandidateId = "A" | "B";
+export type AgentActivityAction = "thinking" | "searching" | "reading" | "editing" | "testing" | "repairing" | "done" | "failed";
+
+export interface ProgressDetail extends Record<string, unknown> {
+  model?: string;
+  provider?: string;
+  concurrency?: number;
+  requestTimeoutMs?: number;
+  agentEventType?: "model_turn" | "tool_call" | "tool_result" | "budget" | "terminal";
+  action?: AgentActivityAction;
+  tool?: string;
+  label?: string;
+  toolCallsExecuted?: number;
+  maxToolCalls?: number;
+  testCycles?: number;
+  maxTestCycles?: number;
+  totalTokens?: number;
+  maxTokens?: number;
+  error?: string;
+}
 
 export interface ProgressEvent {
-  type: "analysis_started" | "scenario_started" | "candidate_started" | "candidate_completed" | "scenario_completed" | "analysis_completed" | "analysis_failed";
+  type: "analysis_started" | "scenario_started" | "candidate_started" | "agent_activity" | "candidate_completed" | "scenario_completed" | "analysis_completed" | "analysis_failed";
   analysisId: string;
   scenarioId?: string;
   candidateId?: CandidateId;
+  trial?: number;
   timestampMs?: number;
-  detail?: Record<string, unknown>;
+  detail?: ProgressDetail;
 }
 
 export type AnalysisState =
