@@ -52,12 +52,12 @@ test("analysis repository persists safe lifecycle metadata and hydrates complete
 
 test("analysis repository lists newest valid runs first, caps at fifty, and skips malformed manifests", async () => {
   const root = await tempRoot();
-  const repository = new AnalysisRepository(root);
+  let tick = Date.parse("2026-08-12T00:00:00.000Z");
+  const repository = new AnalysisRepository(root, () => new Date(tick++));
 
   for (let index = 0; index < 55; index += 1) {
     const id = `run-${String(index).padStart(2, "0")}`;
     await repository.createRunning(id);
-    await new Promise((resolve) => setTimeout(resolve, 1));
   }
 
   const malformedDir = path.join(root, ".futureproof", "runs", "broken");
