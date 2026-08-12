@@ -71,13 +71,13 @@ FutureProof does not pretend to resume that coding-agent execution.
 
 ### Per-analysis state manifest
 
-Use one safe state file per analysis instead of a single global mutable index. This avoids lock/contention problems when bounded parallel runs update metadata.
+Use one safe state file per analysis instead of a single global mutable index. This avoids a second mutable global index and reuses the canonical run directory already owned by `analysisArtifactDir()`.
 
 Canonical location:
 
 ```text
 .futureproof/
-  analyses/
+  runs/
     <analysisId>/
       analysis-state.json
       report.json
@@ -111,7 +111,7 @@ interface PersistedAnalysisSummary {
 
 ### Analysis repository
 
-Add a small API-layer repository responsible for persistence and hydration. It has one concern: translate analysis ids to safe persisted state/report data under the canonical artifact root.
+Add a small API-layer repository responsible for persistence and hydration. It has one concern: translate analysis ids to safe persisted state/report data under the existing canonical run artifact root.
 
 Recommended interface:
 
@@ -128,9 +128,9 @@ interface AnalysisRepository {
 }
 ```
 
-Writes use the existing artifact helpers and an atomic temp-file-then-rename pattern for `analysis-state.json` so a process interruption does not leave partially written JSON.
+Writes use the existing artifact root plus an atomic temp-file-then-rename pattern for `analysis-state.json` so a process interruption does not leave partially written JSON.
 
-`list()` scans analysis directories, reads valid state manifests, ignores malformed/unrelated directories, sorts by `createdAt` descending, and caps output at 50.
+`list()` scans `.futureproof/runs`, reads valid state manifests, ignores malformed/unrelated directories, sorts by `createdAt` descending, and caps output at 50.
 
 ## API changes
 
@@ -208,7 +208,7 @@ The currently active run id may also be the selected analysis id, but these are 
 
 - Run completes -> refresh history -> select completed id -> show report.
 - User clicks another completed history row -> `GET /api/analyses/:id` -> replace selected report/runtime metadata -> remain in Reports.
-- User clicks **+ New Analysis** -> workspace becomes idle/setup and selected analysis becomes null; recent history is preserved.
+- User clicks **+ New Analysis** -> workspace becomes idle/setup and selected analysis becomes null; recent history is preserved and the local-storage selection key is removed.
 - User then clicks Reports -> recent list remains available.
 - User clicks an old run -> hydrate and show its report.
 
@@ -222,7 +222,7 @@ If hydration returns 404, remove the stale local-storage id and continue normall
 
 Keep the existing evidence report rather than redesigning it again.
 
-Add a compact `RecentRunsPanel` above or beside the selected report:
+Add a compact `RecentRunsPanel` above the selected report:
 
 - desktop: compact full-width history table/strip above the report to preserve report width;
 - mobile: stacked cards;
