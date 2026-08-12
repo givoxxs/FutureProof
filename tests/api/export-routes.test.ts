@@ -138,6 +138,29 @@ test("completed analysis serves Markdown and checksum manifest exports", async (
   }
 });
 
+test("completed exports rehydrate after API restart", async () => {
+  const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), "futureproof-export-api-"));
+  const first = buildServer({ projectRoot, idFactory: () => "analysis-export", runDemo: async () => report(projectRoot) });
+  try {
+    await complete(first);
+  } finally {
+    await first.close();
+  }
+
+  const second = buildServer({ projectRoot, idFactory: () => "unused", runDemo: async () => report(projectRoot) });
+  try {
+    const markdown = await second.inject({ method: "GET", url: "/api/analyses/analysis-export/exports/report.md" });
+    assert.equal(markdown.statusCode, 200);
+    assert.match(markdown.body, /# FutureProof Analysis Report/);
+
+    const manifest = await second.inject({ method: "GET", url: "/api/analyses/analysis-export/exports/manifest.json" });
+    assert.equal(manifest.statusCode, 200);
+    assert.equal(manifest.json().analysisId, "analysis-export");
+  } finally {
+    await second.close();
+  }
+});
+
 test("export route rejects unknown files", async () => {
   const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), "futureproof-export-api-"));
   const server = buildServer({ projectRoot, idFactory: () => "analysis-export", runDemo: async () => report(projectRoot) });
