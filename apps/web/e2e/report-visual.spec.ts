@@ -91,6 +91,20 @@ const report = {
   scenarios,
 };
 
+const summary = {
+  version: 1,
+  analysisId: "visual-analysis",
+  status: "completed",
+  createdAt: "2026-08-12T01:00:00.000Z",
+  updatedAt: "2026-08-12T01:04:00.000Z",
+  completedAt: "2026-08-12T01:04:00.000Z",
+  provider: "OpenRouter",
+  model: "deepseek/deepseek-v4-flash-0731",
+  concurrency: 2,
+  requestTimeoutMs: 90_000,
+  candidateRisk: { A: 18, B: 74 },
+};
+
 const scenarioDetail = {
   scenario: scenarios.find((scenario) => scenario.id === "FR-04"),
   candidates: { A: aggregatesA[3], B: aggregatesB[3] },
@@ -98,6 +112,9 @@ const scenarioDetail = {
 };
 
 async function mockAnalysisApi(page: Page): Promise<void> {
+  await page.route("**/api/analyses", async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ analyses: [summary] }) });
+  });
   await page.route("**/api/analyses/demo", async (route) => {
     await route.fulfill({ status: 202, contentType: "application/json", body: JSON.stringify({ analysisId: "visual-analysis" }) });
   });
