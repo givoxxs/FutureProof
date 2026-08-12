@@ -22,18 +22,16 @@ export function RecentRunsPanel({
   selectedAnalysisId,
   loading,
   onSelect,
-  onStart,
 }: {
   analyses: AnalysisSummary[];
   selectedAnalysisId: string | null;
   loading: boolean;
   onSelect: (analysis: AnalysisSummary) => void;
-  onStart: () => void;
+  onStart?: () => void;
 }) {
   return <section className="recent-runs-panel" aria-label="Recent Runs">
     <div className="recent-runs-heading">
       <div><p className="eyebrow">History</p><h2>Recent Runs</h2><p>Completed evidence stays available when you start a new analysis.</p></div>
-      <button className="secondary-button" type="button" onClick={onStart}>＋ New Analysis</button>
     </div>
 
     {loading ? <p className="recent-runs-loading" role="status">Loading recent analyses…</p> : analyses.length === 0 ? <div className="recent-runs-empty"><strong>No saved runs yet.</strong><span>Complete an analysis and it will appear here.</span></div> : <div className="recent-runs-list">
