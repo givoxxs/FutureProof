@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getAnalysis, getArtifact, getScenarioDetail, startDemoAnalysis, subscribeToProgress, type ProgressEvent } from "./api";
+import { getAnalysis, getArtifact, getScenarioDetail, listAnalyses, startDemoAnalysis, subscribeToProgress, type AnalysisSummary, type ProgressEvent } from "./api";
 import { deriveExperimentState, DISPLAY_SCENARIOS, type ExperimentViewModel } from "./experiment-state";
+import { RecentRunsPanel } from "./recent-runs";
 import { ReportPage } from "./report-page";
 import { RunProgress } from "./run-progress";
 import { ScenarioDrawer } from "./scenario-drawer";
@@ -8,6 +9,8 @@ import "./workspace.css";
 
 export type AppView = "overview" | "scenarios" | "experiments" | "comparisons" | "reports" | "settings";
 type AnalysisState = "idle" | "running" | "completed" | "failed";
+
+const SELECTED_ANALYSIS_KEY = "futureproof.selectedAnalysisId.v1";
 
 const navigation: ReadonlyArray<{ view: AppView; label: string; icon: string }> = [
   { view: "overview", label: "Overview", icon: "⌂" },
@@ -135,7 +138,7 @@ function ComparisonPage({ report, onNavigate }: { report: any; onNavigate: (view
 }
 
 function EmptyReportsPage({ onStart }: { onStart: () => void }) {
-  return <section className="workspace-page"><p className="eyebrow">Reports</p><h1>Reports</h1><p>A report appears after the controlled experiment completes.</p><div className="workspace-actions"><button className="primary-button" type="button" onClick={onStart}>Start Analysis →</button></div></section>;
+  return <section className="workspace-page reports-empty"><p className="eyebrow">Reports</p><h1>Select a saved analysis</h1><p>Choose a completed run above to reopen its evidence, or start a new controlled experiment.</p><div className="workspace-actions"><button className="primary-button" type="button" onClick={onStart}>Start Analysis →</button></div></section>;
 }
 
 function SettingsPage({ runtime }: { runtime: ExperimentViewModel }) {
@@ -143,10 +146,15 @@ function SettingsPage({ runtime }: { runtime: ExperimentViewModel }) {
 }
 
 export function App() {
-  const [analysisId, setAnalysisId] = useState<string | null>(null);
-  const [state, setState] = useState<AnalysisState>("idle");
+  const [activeAnalysisId, setActiveAnalysisId] = useState<string | null>(null);
+  const [activeState, setActiveState] = useState<AnalysisState>("idle");
+  const [activeReport, setActiveReport] = useState<any>(null);
+  const [selectedAnalysisId, setSelectedAnalysisId] = useState<string | null>(null);
+  const [selectedReport, setSelectedReport] = useState<any>(null);
+  const [recentAnalyses, setRecentAnalyses] = useState<AnalysisSummary[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [view, setView] = useState<AppView>("overview");
-  const [report, setReport] = useState<any>(null);
   const [events, setEvents] = useState<ProgressEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
@@ -156,41 +164,124 @@ export function App() {
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const runtime = useMemo(() => deriveExperimentState(events), [events]);
 
-  const refreshTerminalState = useCallback(async (id: string) => {
-    const next = await getAnalysis(id);
-    if (next.status === "completed") {
-      setReport(next.report);
-      setState("completed");
-      setView("reports");
-    } else if (next.status === "failed") {
-      setError(next.error);
-      setState("failed");
-      setView("experiments");
+  const refreshHistory = useCallback(async (): Promise<AnalysisSummary[] | null> => {
+    setHistoryLoading(true);
+    try {
+      const result = await listAnalyses();
+      setRecentAnalyses(result.analyses);
+      setHistoryError(null);
+      return result.analyses;
+    } catch (historyLoadError) {
+      setHistoryError(historyLoadError instanceof Error ? historyLoadError.message : String(historyLoadError));
+      return null;
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
+  const selectCompletedAnalysis = useCallback(async (analysisId: string, navigateToReports = true) => {
+    try {
+      const next = await getAnalysis(analysisId);
+      if (next.status !== "completed") {
+        setHistoryError(next.status === "running" ? "Analysis is still running." : next.error);
+        return false;
+      }
+      setSelectedAnalysisId(analysisId);
+      setSelectedReport(next.report);
+      setHistoryError(null);
+      window.localStorage.setItem(SELECTED_ANALYSIS_KEY, analysisId);
+      if (navigateToReports) setView("reports");
+      return true;
+    } catch (selectionError) {
+      setHistoryError(selectionError instanceof Error ? selectionError.message : String(selectionError));
+      if (window.localStorage.getItem(SELECTED_ANALYSIS_KEY) === analysisId) window.localStorage.removeItem(SELECTED_ANALYSIS_KEY);
+      return false;
     }
   }, []);
 
   useEffect(() => {
-    if (!analysisId || state !== "running") return;
-    const unsubscribe = subscribeToProgress(analysisId, (event) => {
-      setEvents((current) => [...current, event]);
-      if (event.type === "analysis_completed" || event.type === "analysis_failed") void refreshTerminalState(analysisId);
-    }, () => window.setTimeout(() => void refreshTerminalState(analysisId), 500));
-    return unsubscribe;
-  }, [analysisId, refreshTerminalState, state]);
+    let cancelled = false;
+    void (async () => {
+      const analyses = await refreshHistory();
+      if (cancelled || !analyses) return;
+      const storedId = window.localStorage.getItem(SELECTED_ANALYSIS_KEY);
+      if (!storedId) return;
+      const stored = analyses.find((analysis) => analysis.analysisId === storedId);
+      if (!stored || stored.status !== "completed") {
+        window.localStorage.removeItem(SELECTED_ANALYSIS_KEY);
+        return;
+      }
+      if (cancelled) return;
+      const restored = await selectCompletedAnalysis(storedId, true);
+      if (!restored && !cancelled) window.localStorage.removeItem(SELECTED_ANALYSIS_KEY);
+    })();
+    return () => { cancelled = true; };
+  }, [refreshHistory, selectCompletedAnalysis]);
 
-  const reset = () => {
-    setAnalysisId(null); setState("idle"); setView("overview"); setReport(null); setEvents([]); setError(null); setDrawerDetail(null); setDrawerScenarioId(null);
+  const refreshTerminalState = useCallback(async (id: string) => {
+    const next = await getAnalysis(id);
+    if (next.status === "completed") {
+      setActiveReport(next.report);
+      setActiveState("completed");
+      setSelectedAnalysisId(id);
+      setSelectedReport(next.report);
+      window.localStorage.setItem(SELECTED_ANALYSIS_KEY, id);
+      await refreshHistory();
+      setView("reports");
+    } else if (next.status === "failed" || next.status === "interrupted") {
+      setError(next.error);
+      setActiveState("failed");
+      await refreshHistory();
+      setView("experiments");
+    }
+  }, [refreshHistory]);
+
+  useEffect(() => {
+    if (!activeAnalysisId || activeState !== "running") return;
+    const unsubscribe = subscribeToProgress(activeAnalysisId, (event) => {
+      setEvents((current) => [...current, event]);
+      if (event.type === "analysis_completed" || event.type === "analysis_failed") void refreshTerminalState(activeAnalysisId);
+    }, () => window.setTimeout(() => void refreshTerminalState(activeAnalysisId), 500));
+    return unsubscribe;
+  }, [activeAnalysisId, activeState, refreshTerminalState]);
+
+  const resetWorkspace = () => {
+    if (activeState === "running") return;
+    setActiveAnalysisId(null);
+    setActiveState("idle");
+    setActiveReport(null);
+    setSelectedAnalysisId(null);
+    setSelectedReport(null);
+    window.localStorage.removeItem(SELECTED_ANALYSIS_KEY);
+    setView("overview");
+    setEvents([]);
+    setError(null);
+    setHistoryError(null);
+    setDrawerDetail(null);
+    setDrawerScenarioId(null);
+    setDrawerLoading(false);
   };
 
   const start = async () => {
-    setStarting(true); setView("experiments"); setError(null); setEvents([]); setReport(null); setDrawerDetail(null); setDrawerScenarioId(null);
+    setStarting(true);
+    setView("experiments");
+    setError(null);
+    setHistoryError(null);
+    setEvents([]);
+    setActiveReport(null);
+    setSelectedAnalysisId(null);
+    setSelectedReport(null);
+    window.localStorage.removeItem(SELECTED_ANALYSIS_KEY);
+    setDrawerDetail(null);
+    setDrawerScenarioId(null);
     try {
       const created = await startDemoAnalysis();
-      setAnalysisId(created.analysisId);
-      setState("running");
+      setActiveAnalysisId(created.analysisId);
+      setActiveState("running");
     } catch (runError) {
       setError(runError instanceof Error ? runError.message : String(runError));
-      setState("failed");
+      setActiveState("failed");
+      await refreshHistory();
     } finally { setStarting(false); }
   };
 
@@ -200,30 +291,38 @@ export function App() {
   };
 
   const openScenario = async (scenarioId: string, trigger: HTMLButtonElement) => {
-    if (!analysisId) return;
-    triggerRef.current = trigger; setDrawerScenarioId(scenarioId); setDrawerLoading(true); setDrawerDetail(null);
-    try { setDrawerDetail(await getScenarioDetail(analysisId, scenarioId)); }
-    catch (detailError) { setError(detailError instanceof Error ? detailError.message : String(detailError)); setDrawerScenarioId(null); }
+    if (!selectedAnalysisId) return;
+    triggerRef.current = trigger;
+    setDrawerScenarioId(scenarioId);
+    setDrawerLoading(true);
+    setDrawerDetail(null);
+    try { setDrawerDetail(await getScenarioDetail(selectedAnalysisId, scenarioId)); }
+    catch (detailError) { setHistoryError(detailError instanceof Error ? detailError.message : String(detailError)); setDrawerScenarioId(null); }
     finally { setDrawerLoading(false); }
   };
 
   const closeDrawer = () => { setDrawerScenarioId(null); setDrawerDetail(null); };
+  const reportContext = selectedReport ?? activeReport;
 
   let content: React.ReactNode;
-  if (view === "overview") content = state === "idle" ? <SetupPage onStart={() => void start()} busy={starting} error={error} /> : <OverviewPage state={state} report={report} runtime={runtime} onNavigate={navigate} onStart={() => void start()} />;
-  else if (view === "scenarios") content = <FutureScenariosPage report={report} />;
-  else if (view === "experiments") content = <ExperimentPage state={state} analysisId={analysisId} events={events} error={error} onStart={() => void start()} />;
-  else if (view === "comparisons") content = <ComparisonPage report={report} onNavigate={navigate} />;
-  else if (view === "reports") content = state === "completed" && report ? <ReportPage report={report} onRerun={() => void start()} onOpenScenario={(scenarioId, trigger) => void openScenario(scenarioId, trigger)} /> : <EmptyReportsPage onStart={() => void start()} />;
+  if (view === "overview") content = activeState === "idle" ? <SetupPage onStart={() => void start()} busy={starting} error={error} /> : <OverviewPage state={activeState} report={activeReport} runtime={runtime} onNavigate={navigate} onStart={() => void start()} />;
+  else if (view === "scenarios") content = <FutureScenariosPage report={reportContext} />;
+  else if (view === "experiments") content = <ExperimentPage state={activeState} analysisId={activeAnalysisId} events={events} error={error} onStart={() => void start()} />;
+  else if (view === "comparisons") content = <ComparisonPage report={reportContext} onNavigate={navigate} />;
+  else if (view === "reports") content = <div className="reports-workspace">
+    <RecentRunsPanel analyses={recentAnalyses} selectedAnalysisId={selectedAnalysisId} loading={historyLoading} onSelect={(analysis) => void selectCompletedAnalysis(analysis.analysisId)} onStart={resetWorkspace} />
+    {historyError ? <div className="history-error-banner" role="alert">{historyError}</div> : null}
+    {selectedAnalysisId && selectedReport ? <ReportPage report={selectedReport} onRerun={() => void start()} onOpenScenario={(scenarioId, trigger) => void openScenario(scenarioId, trigger)} /> : <EmptyReportsPage onStart={() => void start()} />}
+  </div>;
   else content = <SettingsPage runtime={runtime} />;
 
   return <div className="app-shell">
-    <Sidebar view={view} analysisState={state} analysisId={analysisId} runtime={runtime} onNavigate={navigate} onNewAnalysis={reset} />
+    <Sidebar view={view} analysisState={activeState} analysisId={activeAnalysisId} runtime={runtime} onNavigate={navigate} onNewAnalysis={resetWorkspace} />
     <main className="app-main">{content}</main>
     {drawerLoading && drawerScenarioId ? <div className="drawer-loading" role="status">Loading scenario evidence…</div> : null}
-    {analysisId && view === "reports" && drawerScenarioId && drawerDetail ? <ScenarioDrawer analysisId={analysisId} detail={drawerDetail} triggerRef={triggerRef} onClose={closeDrawer} loadArtifact={async (candidateId, kind) => {
+    {selectedAnalysisId && view === "reports" && drawerScenarioId && drawerDetail ? <ScenarioDrawer analysisId={selectedAnalysisId} detail={drawerDetail} triggerRef={triggerRef} onClose={closeDrawer} loadArtifact={async (candidateId, kind) => {
       const trial = drawerDetail.rawRuns?.[candidateId]?.[0]?.trial ?? 1;
-      return await getArtifact({ analysisId, scenarioId: drawerScenarioId, candidateId, trial, kind });
+      return await getArtifact({ analysisId: selectedAnalysisId, scenarioId: drawerScenarioId, candidateId, trial, kind });
     }} /> : null}
   </div>;
 }
