@@ -188,6 +188,231 @@
   text-align: right;
 }
 
+.reports-workspace {
+  display: grid;
+  gap: 14px;
+}
+
+.recent-runs-panel {
+  overflow: hidden;
+  border: 1px solid var(--fp-border, #e5e7eb);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.recent-runs-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 15px 16px 13px;
+  border-bottom: 1px solid var(--fp-border, #e5e7eb);
+  background: #fbfcfe;
+}
+
+.recent-runs-heading .eyebrow {
+  margin: 0 0 3px;
+}
+
+.recent-runs-heading h2 {
+  margin: 0;
+  color: #101828;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.recent-runs-heading p:not(.eyebrow) {
+  margin: 4px 0 0;
+  color: #7a8699;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.recent-runs-loading,
+.recent-runs-empty {
+  margin: 0;
+  padding: 18px 16px;
+  color: #667085;
+  font-size: 11px;
+}
+
+.recent-runs-empty {
+  display: grid;
+  gap: 3px;
+}
+
+.recent-runs-empty strong {
+  color: #344054;
+  font-weight: 600;
+}
+
+.recent-runs-empty span {
+  color: #98a2b3;
+}
+
+.recent-runs-list {
+  display: grid;
+}
+
+.recent-run-row {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 88px minmax(150px, .9fr) minmax(190px, 1.3fr) 72px 72px;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border: 0;
+  border-bottom: 1px solid #eef0f4;
+  color: #344054;
+  background: #fff;
+  text-align: left;
+}
+
+.recent-run-row:last-child {
+  border-bottom: 0;
+}
+
+.recent-run-selectable {
+  cursor: pointer;
+}
+
+.recent-run-selectable:hover {
+  background: #fafaff;
+}
+
+.recent-run-selectable:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid #818cf8;
+  outline-offset: -2px;
+}
+
+.recent-run-row.selected {
+  box-shadow: inset 3px 0 0 var(--fp-indigo, #5b5ce2);
+  background: #f8f8ff;
+}
+
+.history-status {
+  width: max-content;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+
+.history-status-completed {
+  color: #087443;
+  background: #eaf9f1;
+}
+
+.history-status-running {
+  color: #4f46e5;
+  background: #efefff;
+}
+
+.history-status-failed {
+  color: #b42318;
+  background: #fff0f0;
+}
+
+.history-status-interrupted {
+  color: #a15c00;
+  background: #fff5df;
+}
+
+.history-id,
+.history-runtime,
+.history-risk {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.history-id code,
+.history-runtime strong,
+.history-risk strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-id code {
+  color: #344054;
+  font-size: 10px;
+}
+
+.history-id small,
+.history-runtime small,
+.history-risk small {
+  color: #98a2b3;
+  font-size: 8px;
+  font-weight: 500;
+}
+
+.history-runtime strong {
+  color: #475467;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 9px;
+  font-weight: 500;
+}
+
+.history-risk {
+  justify-items: end;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.history-risk strong {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.history-risk-a strong {
+  color: var(--fp-indigo, #5b5ce2);
+}
+
+.history-risk-b strong {
+  color: var(--fp-pink, #e83e8c);
+}
+
+.history-error {
+  grid-column: 2 / -1;
+  margin-top: -4px;
+  overflow: hidden;
+  color: #a15c00;
+  font-size: 9px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-run-failed .history-error {
+  color: #b42318;
+}
+
+.history-error-banner {
+  padding: 10px 12px;
+  border: 1px solid #f4c7c3;
+  border-radius: 7px;
+  color: #9f2d24;
+  background: #fff6f5;
+  font-size: 10px;
+}
+
+.reports-empty {
+  max-width: none;
+  padding-top: 18px;
+}
+
 @media (max-width: 760px) {
   .workspace-page {
     padding: 36px 20px 56px;
@@ -219,5 +444,61 @@
 
   .workspace-settings strong {
     text-align: left;
+  }
+
+  .reports-workspace,
+  .recent-runs-panel,
+  .recent-runs-list,
+  .recent-run-row {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .recent-runs-heading {
+    align-items: flex-start;
+  }
+
+  .recent-run-row {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 8px 10px;
+    padding: 12px;
+  }
+
+  .history-status {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .history-risk-a {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+
+  .history-risk-b {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+  }
+
+  .history-id {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .history-runtime {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+
+  .history-runtime strong,
+  .history-runtime small,
+  .history-error {
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .history-error {
+    grid-column: 1 / -1;
+    grid-row: 4;
+    margin-top: 0;
   }
 }

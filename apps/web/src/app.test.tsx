@@ -7,6 +7,7 @@ import type { ProgressEvent } from "./api";
 const api = vi.hoisted(() => ({
   startDemoAnalysis: vi.fn(),
   getAnalysis: vi.fn(),
+  listAnalyses: vi.fn(),
   subscribeToProgress: vi.fn(),
   getScenarioDetail: vi.fn(),
   getArtifact: vi.fn(),
@@ -76,13 +77,30 @@ const completedReport = {
   scenarios: [scenario],
 };
 
+const completedSummary = {
+  version: 1,
+  analysisId: "analysis-ui",
+  status: "completed",
+  createdAt: "2026-08-12T01:00:00.000Z",
+  updatedAt: "2026-08-12T01:02:00.000Z",
+  completedAt: "2026-08-12T01:02:00.000Z",
+  provider: "OpenRouter",
+  model: "deepseek/deepseek-v4-flash-0731",
+  concurrency: 2,
+  requestTimeoutMs: 90_000,
+  candidateRisk: { A: 5, B: 18 },
+};
+
+const SELECTED_ANALYSIS_KEY = "futureproof.selectedAnalysisId.v1";
 let progressHandler: ((event: ProgressEvent) => void) | null = null;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  window.localStorage.clear();
   progressHandler = null;
   api.startDemoAnalysis.mockResolvedValue({ analysisId: "analysis-ui" });
   api.getAnalysis.mockResolvedValue({ status: "running", analysisId: "analysis-ui" });
+  api.listAnalyses.mockResolvedValue({ analyses: [] });
   api.subscribeToProgress.mockImplementation((_analysisId: string, onEvent: (event: ProgressEvent) => void) => {
     progressHandler = onEvent;
     return () => undefined;
@@ -136,6 +154,7 @@ describe("App workspace navigation", () => {
 
   it("switches to Reports on completion and preserves the report across manual navigation", async () => {
     api.getAnalysis.mockResolvedValue({ status: "completed", analysisId: "analysis-ui", report: completedReport });
+    api.listAnalyses.mockResolvedValue({ analyses: [completedSummary] });
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: /Start Analysis/i }));
     await waitFor(() => expect(progressHandler).not.toBeNull());
@@ -149,5 +168,52 @@ describe("App workspace navigation", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Reports" }));
     expect(screen.getByRole("heading", { name: "Analysis Report" })).toBeTruthy();
+  });
+
+  it("keeps a completed run in Recent Runs after New Analysis and can reopen it", async () => {
+    api.getAnalysis.mockResolvedValue({ status: "completed", analysisId: "analysis-ui", report: completedReport });
+    api.listAnalyses.mockResolvedValue({ analyses: [completedSummary] });
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /Start Analysis/i }));
+    await waitFor(() => expect(progressHandler).not.toBeNull());
+    act(() => progressHandler?.({ type: "analysis_completed", analysisId: "analysis-ui" }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Analysis Report" })).toBeTruthy());
+
+    const newAnalysis = screen.getByRole("button", { name: /New Analysis/i });
+    expect(newAnalysis.hasAttribute("disabled")).toBe(false);
+    fireEvent.click(newAnalysis);
+    expect(screen.getByRole("heading", { name: /Which implementation is easier to change tomorrow/i })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Reports" }));
+    expect(await screen.findByRole("heading", { name: "Recent Runs" })).toBeTruthy();
+    const historyRun = screen.getByRole("button", { name: /analysis-ui/i });
+    fireEvent.click(historyRun);
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Analysis Report" })).toBeTruthy());
+    expect(window.localStorage.getItem(SELECTED_ANALYSIS_KEY)).toBe("analysis-ui");
+  });
+
+  it("restores a selected completed analysis from localStorage on mount", async () => {
+    window.localStorage.setItem(SELECTED_ANALYSIS_KEY, "analysis-ui");
+    api.listAnalyses.mockResolvedValue({ analyses: [completedSummary] });
+    api.getAnalysis.mockResolvedValue({ status: "completed", analysisId: "analysis-ui", report: completedReport });
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Analysis Report" })).toBeTruthy());
+    expect(screen.getByRole("button", { name: "Reports" }).getAttribute("aria-current")).toBe("page");
+    expect(window.localStorage.getItem(SELECTED_ANALYSIS_KEY)).toBe("analysis-ui");
+  });
+
+  it("clears a stale selected analysis id without deleting Recent Runs", async () => {
+    window.localStorage.setItem(SELECTED_ANALYSIS_KEY, "missing-run");
+    api.listAnalyses.mockResolvedValue({ analyses: [completedSummary] });
+    api.getAnalysis.mockRejectedValue(new Error("analysis not found"));
+
+    render(<App />);
+
+    await waitFor(() => expect(window.localStorage.getItem(SELECTED_ANALYSIS_KEY)).toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "Reports" }));
+    expect(await screen.findByRole("heading", { name: "Recent Runs" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /analysis-ui/i })).toBeTruthy();
   });
 });

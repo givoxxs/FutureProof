@@ -1,6 +1,9 @@
 import { expect, test } from "@playwright/test";
 
 test("sidebar navigates every workspace view", async ({ page }) => {
+  await page.route("**/api/analyses", async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ analyses: [] }) });
+  });
   await page.goto("/");
 
   await expect(page.getByRole("heading", { name: "Which implementation is easier to change tomorrow?" })).toBeVisible();
@@ -17,7 +20,7 @@ test("sidebar navigates every workspace view", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Candidate Comparison" })).toBeVisible();
 
   await page.getByRole("button", { name: "Reports" }).click();
-  await expect(page.getByRole("heading", { name: "Reports" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Recent Runs" })).toBeVisible();
 
   await page.getByRole("button", { name: "Settings" }).click();
   await expect(page.getByRole("heading", { name: "Runtime Settings" })).toBeVisible();
