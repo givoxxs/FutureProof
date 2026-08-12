@@ -52,9 +52,15 @@ function riskFromReport(report: AnalysisReport): { A: number; B: number } {
 
 export class AnalysisRepository {
   private readonly projectRoot: string;
+  private readonly now: () => Date;
 
-  constructor(projectRoot: string) {
+  constructor(projectRoot: string, now: () => Date = () => new Date()) {
     this.projectRoot = projectRoot;
+    this.now = now;
+  }
+
+  private timestamp(): string {
+    return this.now().toISOString();
   }
 
   private runDir(analysisId: string): string {
@@ -80,7 +86,7 @@ export class AnalysisRepository {
 
   async createRunning(analysisId: string): Promise<PersistedAnalysisSummary> {
     assertAnalysisId(analysisId);
-    const now = new Date().toISOString();
+    const now = this.timestamp();
     const summary: PersistedAnalysisSummary = {
       version: 1,
       analysisId,
@@ -100,14 +106,14 @@ export class AnalysisRepository {
       model: runtime.model ?? current.model,
       concurrency: runtime.concurrency ?? current.concurrency,
       requestTimeoutMs: runtime.requestTimeoutMs ?? current.requestTimeoutMs,
-      updatedAt: new Date().toISOString(),
+      updatedAt: this.timestamp(),
     };
     await this.writeSummary(next);
   }
 
   async complete(analysisId: string, report: AnalysisReport): Promise<void> {
     const current = await this.requireSummary(analysisId);
-    const now = new Date().toISOString();
+    const now = this.timestamp();
     await this.writeSummary({
       ...current,
       status: "completed",
@@ -128,7 +134,7 @@ export class AnalysisRepository {
 
   private async setTerminal(analysisId: string, status: "failed" | "interrupted", error: string): Promise<void> {
     const current = await this.requireSummary(analysisId);
-    const now = new Date().toISOString();
+    const now = this.timestamp();
     await this.writeSummary({
       ...current,
       status,
