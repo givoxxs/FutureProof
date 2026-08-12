@@ -146,6 +146,7 @@ test("persisted running analysis becomes interrupted when no current process own
 
 test("failed analysis remains in history after API reconstruction", async () => {
   const root = await tempRoot();
+  const repository = new AnalysisRepository(root);
   const first = buildServer({
     projectRoot: root,
     idFactory: () => "failed-history-run",
@@ -158,6 +159,9 @@ test("failed analysis remains in history after API reconstruction", async () => 
     await first.inject({ method: "POST", url: "/api/analyses/demo", payload: {} });
     const terminal = await waitForTerminal(first, "failed-history-run");
     assert.equal(terminal.status, "failed");
+    const persisted = await repository.getSummary("failed-history-run");
+    assert.equal(persisted?.status, "failed");
+    assert.match(persisted?.error ?? "", /provider unavailable/);
   } finally {
     await first.close();
   }
