@@ -144,10 +144,18 @@ export function registerAnalysisRoutes(server: FastifyInstance, options: Analysi
     await repository.createRunning(analysisId);
     states.set(analysisId, { status: "running", analysisId });
     let runtime: RuntimeMetadata = {};
+    let runtimePersistence: Promise<void> = Promise.resolve();
+    const enqueueRuntimePersistence = () => {
+      if (!hasRuntime(runtime)) return;
+      const snapshot = { ...runtime };
+      runtimePersistence = runtimePersistence
+        .then(async () => await repository.patchRuntime(analysisId, snapshot))
+        .catch(() => undefined);
+    };
     const emit = (event: ProgressEvent) => {
       if (event.type === "analysis_started") {
         runtime = { ...runtime, ...runtimeFromEvent(event) };
-        if (hasRuntime(runtime)) void repository.patchRuntime(analysisId, runtime).catch(() => undefined);
+        enqueueRuntimePersistence();
       }
       bus.publish({ ...event, analysisId });
     };
@@ -158,6 +166,7 @@ export function registerAnalysisRoutes(server: FastifyInstance, options: Analysi
         const reportFile = path.join(analysisArtifactDir(options.projectRoot, analysisId), "report.json");
         await writeJson(reportFile, report);
         await writeReportBundle(options.projectRoot, report);
+        await runtimePersistence;
         if (hasRuntime(runtime)) await repository.patchRuntime(analysisId, runtime);
         await repository.complete(analysisId, report);
         states.set(analysisId, { status: "completed", analysisId, report });
@@ -166,8 +175,13 @@ export function registerAnalysisRoutes(server: FastifyInstance, options: Analysi
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
+        await runtimePersistence;
         try {
           if (hasRuntime(runtime)) await repository.patchRuntime(analysisId, runtime);
+        } catch {
+          // Runtime metadata is useful but must not prevent the terminal state from being persisted.
+        }
+        try {
           await repository.fail(analysisId, message);
         } catch {
           // Preserve the original execution error in API state even if persistence also fails.
