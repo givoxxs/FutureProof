@@ -51,7 +51,11 @@ function riskFromReport(report: AnalysisReport): { A: number; B: number } {
 }
 
 export class AnalysisRepository {
-  constructor(private readonly projectRoot: string) {}
+  private readonly projectRoot: string;
+
+  constructor(projectRoot: string) {
+    this.projectRoot = projectRoot;
+  }
 
   private runDir(analysisId: string): string {
     assertAnalysisId(analysisId);
