@@ -124,3 +124,26 @@ test("artifact endpoint resolves patch and event logs from opaque identifiers", 
     await server.close();
   }
 });
+
+test("artifact endpoint rehydrates completed evidence after API restart", async () => {
+  const { projectRoot, report } = await makeFixture();
+  const first = buildServer({ projectRoot, idFactory: () => "analysis-artifacts", runDemo: async () => report });
+  try {
+    await complete(first);
+  } finally {
+    await first.close();
+  }
+
+  const second = buildServer({ projectRoot, idFactory: () => "unused", runDemo: async () => report });
+  try {
+    const patch = await second.inject({ method: "GET", url: "/api/analyses/analysis-artifacts/scenarios/FR-04/candidates/B/trials/1/artifacts/patch" });
+    assert.equal(patch.statusCode, 200);
+    assert.match(patch.body, /--- a\/src\/index\.ts/);
+
+    const events = await second.inject({ method: "GET", url: "/api/analyses/analysis-artifacts/scenarios/FR-04/candidates/B/trials/1/artifacts/events" });
+    assert.equal(events.statusCode, 200);
+    assert.match(events.body, /tool_call/);
+  } finally {
+    await second.close();
+  }
+});
