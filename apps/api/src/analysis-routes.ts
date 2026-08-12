@@ -5,12 +5,16 @@ import { analysisArtifactDir } from "@futureproof/core/paths";
 import { writeJson } from "@futureproof/core/artifacts";
 import type { AnalysisReport } from "../../../packages/engine/src/compare.ts";
 import { writeReportBundle } from "../../../packages/engine/src/report-export.ts";
+import { AnalysisRepository, type RuntimeMetadata } from "./analysis-repository.ts";
 import { ProgressBus, type ProgressEvent } from "./progress-bus.ts";
 
 export type AnalysisState =
   | { status: "running"; analysisId: string }
   | { status: "completed"; analysisId: string; report: AnalysisReport }
-  | { status: "failed"; analysisId: string; error: string };
+  | { status: "failed"; analysisId: string; error: string }
+  | { status: "interrupted"; analysisId: string; error: string };
+
+type HydratedAnalysisState = AnalysisState | { status: "unavailable"; analysisId: string; error: string };
 
 export type DemoAnalysisRunner = (args: {
   analysisId: string;
@@ -29,6 +33,9 @@ const EXPORTS = {
   "report.md": { filename: "report.md", contentType: "text/markdown; charset=utf-8" },
   "manifest.json": { filename: "manifest.json", contentType: "application/json; charset=utf-8" },
 } as const;
+
+const INTERRUPTED_MESSAGE = "Analysis interrupted by API restart; execution was not resumed.";
+const REPORT_UNAVAILABLE_MESSAGE = "Completed analysis report is unavailable on disk.";
 
 type ExportName = keyof typeof EXPORTS;
 
@@ -83,16 +90,67 @@ function exportFilePath(projectRoot: string, analysisId: string, name: ExportNam
   return path.join(analysisArtifactDir(projectRoot, analysisId), "exports", EXPORTS[name].filename);
 }
 
+function runtimeFromEvent(event: ProgressEvent): RuntimeMetadata {
+  if (event.type !== "analysis_started" || !event.detail) return {};
+  const runtime: RuntimeMetadata = {};
+  if (typeof event.detail.provider === "string") runtime.provider = event.detail.provider;
+  if (typeof event.detail.model === "string") runtime.model = event.detail.model;
+  if (typeof event.detail.concurrency === "number" && Number.isInteger(event.detail.concurrency)) runtime.concurrency = event.detail.concurrency;
+  if (typeof event.detail.requestTimeoutMs === "number" && Number.isFinite(event.detail.requestTimeoutMs)) runtime.requestTimeoutMs = event.detail.requestTimeoutMs;
+  return runtime;
+}
+
+function hasRuntime(runtime: RuntimeMetadata): boolean {
+  return runtime.provider !== undefined
+    || runtime.model !== undefined
+    || runtime.concurrency !== undefined
+    || runtime.requestTimeoutMs !== undefined;
+}
+
 export function registerAnalysisRoutes(server: FastifyInstance, options: AnalysisRouteOptions) {
   const states = new Map<string, AnalysisState>();
   const bus = options.bus ?? new ProgressBus();
+  const repository = new AnalysisRepository(options.projectRoot);
+
+  async function hydrateState(analysisId: string): Promise<HydratedAnalysisState | null> {
+    const current = states.get(analysisId);
+    if (current) return current;
+
+    const summary = await repository.getSummary(analysisId);
+    if (!summary) return null;
+
+    if (summary.status === "running") {
+      await repository.interrupt(analysisId, INTERRUPTED_MESSAGE);
+      return { status: "interrupted", analysisId, error: INTERRUPTED_MESSAGE };
+    }
+
+    if (summary.status === "completed") {
+      const report = await repository.getReport(analysisId);
+      if (!report) return { status: "unavailable", analysisId, error: REPORT_UNAVAILABLE_MESSAGE };
+      return { status: "completed", analysisId, report };
+    }
+
+    return { status: summary.status, analysisId, error: summary.error ?? (summary.status === "interrupted" ? INTERRUPTED_MESSAGE : "Analysis failed.") };
+  }
+
+  async function completedState(analysisId: string): Promise<Extract<AnalysisState, { status: "completed" }> | HydratedAnalysisState | null> {
+    return await hydrateState(analysisId);
+  }
 
   server.post("/api/analyses/demo", async (request, reply) => {
     const body = request.body as Record<string, unknown> | undefined;
     if (body && Object.keys(body).length > 0) return reply.code(400).send({ error: "demo request does not accept filesystem paths or overrides" });
     const analysisId = options.idFactory();
+    await repository.createRunning(analysisId);
     states.set(analysisId, { status: "running", analysisId });
-    const emit = (event: ProgressEvent) => bus.publish({ ...event, analysisId });
+    let runtime: RuntimeMetadata = {};
+    const emit = (event: ProgressEvent) => {
+      if (event.type === "analysis_started") {
+        runtime = { ...runtime, ...runtimeFromEvent(event) };
+        if (hasRuntime(runtime)) void repository.patchRuntime(analysisId, runtime).catch(() => undefined);
+      }
+      bus.publish({ ...event, analysisId });
+    };
 
     void Promise.resolve().then(async () => {
       try {
@@ -100,12 +158,20 @@ export function registerAnalysisRoutes(server: FastifyInstance, options: Analysi
         const reportFile = path.join(analysisArtifactDir(options.projectRoot, analysisId), "report.json");
         await writeJson(reportFile, report);
         await writeReportBundle(options.projectRoot, report);
+        if (hasRuntime(runtime)) await repository.patchRuntime(analysisId, runtime);
+        await repository.complete(analysisId, report);
         states.set(analysisId, { status: "completed", analysisId, report });
         if (!bus.events(analysisId).some((event) => event.type === "analysis_completed")) {
           emit({ type: "analysis_completed", analysisId });
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
+        try {
+          if (hasRuntime(runtime)) await repository.patchRuntime(analysisId, runtime);
+          await repository.fail(analysisId, message);
+        } catch {
+          // Preserve the original execution error in API state even if persistence also fails.
+        }
         states.set(analysisId, { status: "failed", analysisId, error: message });
         bus.publish({ type: "analysis_failed", analysisId, detail: { error: message } });
       }
@@ -114,16 +180,28 @@ export function registerAnalysisRoutes(server: FastifyInstance, options: Analysi
     return reply.code(202).send({ analysisId });
   });
 
+  server.get("/api/analyses", async () => {
+    const summaries = await repository.list(50);
+    const analyses = await Promise.all(summaries.map(async (summary) => {
+      if (summary.status !== "running" || states.has(summary.analysisId)) return summary;
+      await repository.interrupt(summary.analysisId, INTERRUPTED_MESSAGE);
+      return await repository.getSummary(summary.analysisId) ?? { ...summary, status: "interrupted" as const, error: INTERRUPTED_MESSAGE };
+    }));
+    return { analyses };
+  });
+
   server.get<{ Params: { analysisId: string } }>("/api/analyses/:analysisId", async (request, reply) => {
-    const state = states.get(request.params.analysisId);
+    const state = await hydrateState(request.params.analysisId);
     if (!state) return reply.code(404).send({ error: "analysis not found" });
+    if (state.status === "unavailable") return reply.code(409).send({ error: state.error });
     if (state.status === "completed") return { ...state, report: publicReport(state.report) };
     return state;
   });
 
   server.get<{ Params: { analysisId: string; scenarioId: string } }>("/api/analyses/:analysisId/scenarios/:scenarioId", async (request, reply) => {
-    const state = states.get(request.params.analysisId);
+    const state = await completedState(request.params.analysisId);
     if (!state) return reply.code(404).send({ error: "analysis not found" });
+    if (state.status === "unavailable") return reply.code(409).send({ error: state.error });
     if (state.status !== "completed") return reply.code(409).send({ error: `analysis is ${state.status}` });
     const payload = scenarioPayload(state.report, request.params.scenarioId);
     if (!payload) return reply.code(404).send({ error: "scenario not found" });
@@ -131,8 +209,9 @@ export function registerAnalysisRoutes(server: FastifyInstance, options: Analysi
   });
 
   server.get<{ Params: { analysisId: string; exportName: string } }>("/api/analyses/:analysisId/exports/:exportName", async (request, reply) => {
-    const state = states.get(request.params.analysisId);
+    const state = await completedState(request.params.analysisId);
     if (!state) return reply.code(404).send({ error: "analysis not found" });
+    if (state.status === "unavailable") return reply.code(409).send({ error: state.error });
     if (state.status !== "completed") return reply.code(409).send({ error: `analysis is ${state.status}` });
     if (!(request.params.exportName in EXPORTS)) return reply.code(404).send({ error: "export not found" });
 
@@ -149,8 +228,9 @@ export function registerAnalysisRoutes(server: FastifyInstance, options: Analysi
     Params: { analysisId: string; scenarioId: string; candidateId: string; trial: string; kind: string };
   }>("/api/analyses/:analysisId/scenarios/:scenarioId/candidates/:candidateId/trials/:trial/artifacts/:kind", async (request, reply) => {
     const { analysisId, scenarioId, candidateId, trial: rawTrial, kind } = request.params;
-    const state = states.get(analysisId);
+    const state = await completedState(analysisId);
     if (!state) return reply.code(404).send({ error: "analysis not found" });
+    if (state.status === "unavailable") return reply.code(409).send({ error: state.error });
     if (state.status !== "completed") return reply.code(409).send({ error: `analysis is ${state.status}` });
     if ((candidateId !== "A" && candidateId !== "B") || (kind !== "patch" && kind !== "events")) return reply.code(404).send({ error: "artifact not found" });
     const trial = Number(rawTrial);
@@ -170,8 +250,9 @@ export function registerAnalysisRoutes(server: FastifyInstance, options: Analysi
 
   server.get<{ Params: { analysisId: string } }>("/api/analyses/:analysisId/events", async (request, reply) => {
     const analysisId = request.params.analysisId;
-    const state = states.get(analysisId);
+    const state = await hydrateState(analysisId);
     if (!state) return reply.code(404).send({ error: "analysis not found" });
+    if (state.status === "unavailable") return reply.code(409).send({ error: state.error });
 
     const history = bus.events(analysisId);
     if (state.status !== "running") {
@@ -201,5 +282,5 @@ export function registerAnalysisRoutes(server: FastifyInstance, options: Analysi
     raw.on("close", unsubscribe);
   });
 
-  return { states, bus };
+  return { states, bus, repository };
 }
