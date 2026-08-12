@@ -1,6 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
 async function mockRunningAnalysis(page: Page) {
+  await page.route("**/api/analyses", async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ analyses: [] }) });
+  });
   await page.route("**/api/analyses/demo", async (route) => {
     await route.fulfill({ status: 202, contentType: "application/json", body: JSON.stringify({ analysisId: "parallel-analysis" }) });
   });
