@@ -1,5 +1,21 @@
 export type CandidateId = "A" | "B";
 export type AgentActivityAction = "thinking" | "searching" | "reading" | "editing" | "testing" | "repairing" | "done" | "failed";
+export type PersistedAnalysisStatus = "running" | "completed" | "failed" | "interrupted";
+
+export interface AnalysisSummary {
+  version: 1;
+  analysisId: string;
+  status: PersistedAnalysisStatus;
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string;
+  provider?: string;
+  model?: string;
+  concurrency?: number;
+  requestTimeoutMs?: number;
+  candidateRisk?: { A: number; B: number };
+  error?: string;
+}
 
 export interface ProgressDetail extends Record<string, unknown> {
   model?: string;
@@ -32,7 +48,8 @@ export interface ProgressEvent {
 export type AnalysisState =
   | { status: "running"; analysisId: string }
   | { status: "completed"; analysisId: string; report: any }
-  | { status: "failed"; analysisId: string; error: string };
+  | { status: "failed"; analysisId: string; error: string }
+  | { status: "interrupted"; analysisId: string; error: string };
 
 async function json<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
   const response = await fetch(input, init);
@@ -55,6 +72,10 @@ export async function startDemoAnalysis(): Promise<{ analysisId: string }> {
     headers: { "content-type": "application/json" },
     body: "{}",
   });
+}
+
+export async function listAnalyses(): Promise<{ analyses: AnalysisSummary[] }> {
+  return await json("/api/analyses");
 }
 
 export async function getAnalysis(analysisId: string): Promise<AnalysisState> {
